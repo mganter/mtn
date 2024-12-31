@@ -1,0 +1,82 @@
+ENTITY_TRAIN_STOP_NAME = "ma-train-stop"
+ENTITY_TRAIN_STOP_LAMP_NAME = "ma-train-stop-lamp"
+ENTITY_TRAIN_STOP_CC_NAME = "ma-train-stop-cc"
+
+ITEM_TRAIN_STOP_NAME = "ma-train-stop"
+
+RECIPE_TRAIN_STOP_NAME = "ma-train-stop"
+
+TECHNOLOGY_MTN_NAME = "ma-train-network"
+
+SIGNAL_DEPOT = "mtn-depot"
+SIGNAL_REQUEST_THRESHOLD = "mtn-request-threshold"
+SIGNAL_PROVIDE_THRESHOLD = "mtn-provide-threshold"
+
+SECTION_GROUP_CONFIG = "MLT - Config"
+SECTION_GROUP_CONFIG_INDEX = 1
+SECTION_GROUP_OUTPUT = "MLT - Output"
+SECTION_GROUP_OUTPUT_INDEX = 2
+
+ROLE_DEPOT = "role-depot"
+ROLE_REQUESTER = "role-requester"
+ROLE_PROVIDER = "role-provider"
+
+STATUS_DEPOT_READY_TO_RECEIVE_TRAIN = { type = "virtual", name = "signal-cyan", quality = "normal" }
+STATUS_DEPOT_WITH_READY_TRAIN = { type = "virtual", name = "signal-green", quality = "normal" }
+STATUS_DEPOT_TRAIN_ERROR = { type = "virtual", name = "signal-red", quality = "normal" }
+
+STATUS_REQUESTER_REQUESTING_RESOURCE = { type = "virtual", name = "signal-yellow", quality = "normal" }
+STATUS_REQUESTER_WITH_INCOMING_TRAIN = { type = "virtual", name = "signal-green", quality = "normal" }
+
+STATUS_RROVIDER_PROVIDING_RESOURECE = { type = "virtual", name = "signal-green", quality = "normal" }
+STATUS_RROVIDER_WITH_INCOMING_TRAIN = { type = "virtual", name = "signal-yellow", quality = "normal" }
+
+STATUS_TRAIN_STOP_ERROR = { type = "virtual", name = "signal-red", quality = "normal" }
+STATUS_NEUTRAL = { type = "virtual", name = "signal-white", quality = "normal" }
+
+function dump(o)
+   if type(o) == 'table' then
+      local s = '{ '
+      for k, v in pairs(o) do
+         if type(k) ~= 'number' then k = '"' .. k .. '"' end
+         s = s .. '[' .. k .. '] = ' .. dump(v) .. ','
+      end
+      return s .. '} '
+   else
+      return tostring(o)
+   end
+end
+
+LEVEL = {
+   TRACE = 0,
+   DEBUG = 1,
+   INFO = 2,
+   ERROR = 3,
+   SILENT = 4,
+}
+
+local level_to_log = 0
+local level_to_user = 0
+
+function MTL_Log(level, message)
+   local msg
+   if level == LEVEL.TRACE then
+      msg = "MLT TRACE: " .. message
+   end
+   if level == LEVEL.DEBUG then
+      msg = "MLT DEBUG: " .. message
+   end
+   if level == LEVEL.INFO then
+      msg = "MLT INFO: " .. message
+   end
+   if level == LEVEL.ERROR then
+      msg = "MLT ERROR: " .. message
+   end
+
+   if level >= level_to_log then
+      log(msg)
+   end
+   if level >= level_to_user then
+      game.print(msg)
+   end
+end
