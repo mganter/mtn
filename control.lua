@@ -10,7 +10,7 @@ script.on_event(defines.events.on_cancelled_deconstruction, function(event) Regi
 script.on_event(defines.events.on_entity_logistic_slot_changed, function(event) UpdateConstantCombinatorConfig(event) end)
 
 -- Deregister Events
-script.on_event(defines.events.on_marked_for_deconstruction, function(event) DeregisterStop(event) end)
+script.on_event(defines.events.on_marked_for_deconstruction, function(event) DeconstructStop(event) end)
 script.on_event(defines.events.on_object_destroyed, function(event) DeconstructStop(event) end)
 script.on_event(defines.events.on_tick, function(event) Tick() end)
 
@@ -18,6 +18,10 @@ function init()
   storage.MTL = storage.MTL or {}
   storage.MTL.stops = storage.MTL.stops or {}
   storage.MTL.depots = storage.MTL.depots or {}
+
+  storage.MTL[ROLE_DEPOT] = storage.MTL[ROLE_DEPOT] or {}
+  storage.MTL[ROLE_PROVIDER] = storage.MTL[ROLE_PROVIDER] or {}
+  storage.MTL[ROLE_REQUESTER] = storage.MTL[ROLE_REQUESTER] or {}
 
   storage.MTL.reverse_lookup = storage.MTL.reverse_lookup or {}
 end
@@ -34,7 +38,6 @@ function RegisterStop(event)
   local umbrella = storage.MTL.stops[train_stop.unit_number]
   umbrella.train_stop = event.entity
 
-  MTL_Log(LEVEL.TRACE, dump(storage))
   script.register_on_object_destroyed(train_stop)
   MTL_Log(LEVEL.ERROR, dump(storage.MTL.stops[train_stop.unit_number].train_stop))
 
@@ -109,9 +112,12 @@ function ReadConfig(umbrella)
 
   MTL_Log(LEVEL.INFO, "train stop \"" .. umbrella.train_stop.backer_name .. "\" assumed role " .. dump(role))
   umbrella.role = role[1]
-
   umbrella.provider_config = provider_config
   umbrella.requester_config = requester_config
+
+  storage.MTL[umbrella.role] = storage.MTL[umbrella.role] or {}
+  table.insert(storage.MTL[umbrella.role], umbrella.train_stop.unit_number)
+
   return true
 end
 
@@ -140,19 +146,15 @@ function DeconstructStop(event)
   --MTL_Log(LEVEL.TRACE, dump(storage))
 end
 
-function Tick()
-  local all_requests = {}
-  local all_provides = {}
-  local available_trains = {}
+function GetAvaiableTrains()
+  local available_trains = {
+    fluid = {},
+    item = {},
+  }
 
-  for stop_id, umbrella in pairs(storage.MTL.stops) do
+  for _, stop_id in pairs(storage.MTL[ROLE_DEPOT]) do
+    umbrella = storage.MTL.stops[stop_id]
     if not umbrella.lamp or not umbrella.cc then
-      goto continue
-    end
-
-    local signals = umbrella.lamp.get_signals(defines.wire_connector_id.circuit_red)
-    if not signals then
-      MTL_Log(LEVEL.TRACE, "no signals found for " .. umbrella.train_stop.backer_name)
       goto continue
     end
 
@@ -178,11 +180,61 @@ function Tick()
         goto continue
       end
 
+      carriage_type = (train.carriages[2].prototype.type == "fluid-wagon" and "fluid") or "item"
+
+      if carriage_type == "item" and #train.carriages[2].get_output_inventory().get_contents() ~= 0 then
+        SetStatus(umbrella, STATUS_DEPOT_TRAIN_ERROR)
+        MTL_Log(LEVEL.INFO,
+          "train in stop \"" .. umbrella.train_stop.backer_name ..
+          "\" is not empty and therefor not listed as available train")
+        goto continue
+      end
+
+      MTL_Log(LEVEL.INFO, "carriages: " .. carriage_type .. "  " .. dump(train.carriages[2].get_fluid_contents()))
+      if carriage_type == "fluid" and not train.carriages[2].get_fluid_contents() then
+        SetStatus(umbrella, STATUS_DEPOT_TRAIN_ERROR)
+        MTL_Log(LEVEL.INFO,
+          "train in stop \"" .. umbrella.train_stop.backer_name ..
+          "\" is not empty and therefor not listed as available train")
+        goto continue
+      end
+
+      local fluid_capacity = (carriage_type == "fluid" and train.carriages[2].prototype.fluid_capacity) or 0
+      local slot_capacity = (carriage_type == "item" and train.carriages[2].get_output_inventory().get_bar() - 1) or 0
+
       --train.backer_name = umbrella.train_stop.backer_name
       umbrella.assigned_train = train
-      available_trains[umbrella.train_stop.unit_number] = train
+      available_trains[carriage_type][umbrella.train_stop.unit_number] = {
+        train = train,
+        slot_capacity = slot_capacity,
+        fluid_capacity = fluid_capacity,
+        depot = stop_id,
+      }
+
       SetStatus(umbrella, STATUS_DEPOT_WITH_READY_TRAIN)
     end
+    ::continue::
+  end
+  return available_trains
+end
+
+function Tick()
+  local all_requests = {}
+  local all_provides = {}
+  local available_trains = GetAvaiableTrains()
+  MTL_Log(LEVEL.DEBUG, "available_trains: " .. dump(available_trains))
+
+  for stop_id, umbrella in pairs(storage.MTL.stops) do
+    if not umbrella.lamp or not umbrella.cc then
+      goto continue
+    end
+
+    local signals = umbrella.lamp.get_signals(defines.wire_connector_id.circuit_red)
+    if not signals then
+      MTL_Log(LEVEL.TRACE, "no signals found for " .. umbrella.train_stop.backer_name)
+      goto continue
+    end
+
 
     if umbrella.role == ROLE_REQUESTER then
       local requests = {}
@@ -267,15 +319,19 @@ function Tick()
   for type_name, requests_list in pairs(all_requests) do
     MTL_Log(LEVEL.DEBUG, "type_name: " .. type_name .. "  requests_list: " .. dump(requests_list))
     for _, value in pairs(requests_list) do
-      local it = string.gmatch(type_name, "([%w_-]+)") 
-      local type = it()
-      local name = it()
-      MTL_Log(LEVEL.DEBUG, "type: " .. type .. "  name: " .. name)
+      request_count = value.count
+      if not all_provides[type_name] then
+        goto continue
+      end
+      for _, value in pairs(all_provides[type_name]) do
+        DispatchTrain()
+      end
+      ::continue::
     end
   end
 end
 
-function IsGreaterEqualThanThreshold(item_name, threshold, stack_threshold, count)
+function DispatchTrain(start, stop, resource, count)
 
 end
 
