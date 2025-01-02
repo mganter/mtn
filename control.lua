@@ -194,15 +194,22 @@ function GetAvaiableTrains()
       if carriage_type == "fluid" and not train.carriages[2].get_fluid_contents() then
         SetStatus(umbrella, STATUS_DEPOT_TRAIN_ERROR)
         MTL_Log(LEVEL.INFO,
-          "train in stop \"" .. umbrella.train_stop.backer_name ..
+          "train in stop \"" .. umbrella.train_stobacker_name ..
           "\" is not empty and therefor not listed as available train")
+        goto continue
+      end
+      
+      if umbrella.assigned_train.unit_number ~= train.unit_number then
+        SetStatus(umbrella, STATUS_DEPOT_TRAIN_ERROR)
+        MTL_Log(LEVEL.ERROR,
+          "train in stop \"" .. umbrella.train_stobacker_name ..
+          "\" is not the train assigned to this depot")
         goto continue
       end
 
       local fluid_capacity = (carriage_type == "fluid" and train.carriages[2].prototype.fluid_capacity) or 0
       local slot_capacity = (carriage_type == "item" and train.carriages[2].get_output_inventory().get_bar() - 1) or 0
 
-      --train.backer_name = umbrella.train_stop.backer_name
       umbrella.assigned_train = train
       available_trains[carriage_type][umbrella.train_stop.unit_number] = {
         train = train,
