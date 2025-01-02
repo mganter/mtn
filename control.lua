@@ -199,7 +199,7 @@ function GetAvaiableTrains()
         goto continue
       end
       
-      if umbrella.assigned_train.unit_number ~= train.unit_number then
+      if umbrella.assigned_train.id ~= train.id then
         SetStatus(umbrella, STATUS_DEPOT_TRAIN_ERROR)
         MTL_Log(LEVEL.ERROR,
           "train in stop \"" .. umbrella.train_stobacker_name ..
@@ -225,12 +225,8 @@ function GetAvaiableTrains()
   return available_trains
 end
 
-function Tick()
-  local all_requests = {}
-  local all_provides = {}
-  local available_trains = GetAvaiableTrains()
-  MTL_Log(LEVEL.DEBUG, "available_trains: " .. dump(available_trains))
-
+function GetReqests()
+  all_requests = {}
   for stop_id, umbrella in pairs(storage.MTL.stops) do
     if not umbrella.lamp or not umbrella.cc then
       goto continue
@@ -280,6 +276,28 @@ function Tick()
       end
 
       umbrella.requests = requests
+    end
+    
+    ::continue::
+  end
+  return all_requests
+end
+
+function Tick()
+  local available_trains = GetAvaiableTrains()
+  local all_requests = GetReqests()
+  local all_provides = {}
+  MTL_Log(LEVEL.DEBUG, "available_trains: " .. dump(available_trains))
+
+  for stop_id, umbrella in pairs(storage.MTL.stops) do
+    if not umbrella.lamp or not umbrella.cc then
+      goto continue
+    end
+
+    local signals = umbrella.lamp.get_signals(defines.wire_connector_id.circuit_red)
+    if not signals then
+      MTL_Log(LEVEL.TRACE, "no signals found for " .. umbrella.train_stop.backer_name)
+      goto continue
     end
 
     if umbrella.role == ROLE_PROVIDER then
