@@ -287,7 +287,7 @@ function GetProvides()
   all_provides = {}
   storage.MTL[ROLE_PROVIDER] = storage.MTL[ROLE_PROVIDER] or {}
   for _, stop_id in pairs(storage.MTL[ROLE_PROVIDER]) do
-    local umbrella = storage.MT.stops[stop_id]
+    local umbrella = storage.MTL.stops[stop_id]
     if not umbrella.lamp or not umbrella.cc then
       goto continue
     end
@@ -332,10 +332,10 @@ function GetProvides()
     end
 
     umbrella.provides = provides
-
-
     ::continue::
   end
+
+  return all_provides
 end
 
 function Tick()
@@ -345,13 +345,14 @@ function Tick()
   MTL_Log(LEVEL.DEBUG, "available_trains: " .. dump(available_trains))
 
   for type_name, requests_list in pairs(all_requests) do
-    MTL_Log(LEVEL.DEBUG, "type_name: " .. type_name .. "  requests_list: " .. dump(requests_list))
+    MTL_Log(LEVEL.INFO, "type_name: " .. type_name .. "  requests_list: " .. dump(requests_list))
     for _, value in pairs(requests_list) do
       request_count = value.count
       if not all_provides[type_name] then
         goto continue
       end
       for _, value in pairs(all_provides[type_name]) do
+        MTL_Log(LEVEL.DEBUG, "type_name: " .. type_name .. "  request: " .. dump(value))
         DispatchTrain()
       end
       ::continue::
@@ -364,7 +365,7 @@ function DispatchTrain(start, stop, resource, count)
 end
 
 function DeconstructConstantCombinator(train_stop_unit_number)
-  if not storage.MTL.stops[train_stop_unit_number].cc then
+  if not storage.MTL.sts[train_stop_unit_number].cc then
     return true
   end
 
