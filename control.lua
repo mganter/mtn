@@ -198,7 +198,7 @@ function GetAvaiableTrains()
           "\" is not empty and therefor not listed as available train")
         goto continue
       end
-      
+
       if umbrella.assigned_train.id ~= train.id then
         SetStatus(umbrella, STATUS_DEPOT_TRAIN_ERROR)
         MTL_Log(LEVEL.ERROR,
@@ -227,7 +227,11 @@ end
 
 function GetReqests()
   all_requests = {}
-  for stop_id, umbrella in pairs(storage.MTL.stops) do
+  storage.MTL[ROLE_REQUESTER] = storage.MTL[ROLE_REQUESTER] or {}
+
+  for _, stop_id in pairs(storage.MTL[ROLE_REQUESTER]) do
+    local umbrella = storage.MTL.stops[stop_id]
+
     if not umbrella.lamp or not umbrella.cc then
       goto continue
     end
@@ -238,58 +242,52 @@ function GetReqests()
       goto continue
     end
 
-
-    if umbrella.role == ROLE_REQUESTER then
-      local requests = {}
-      for _, value in ipairs(signals) do
-        -- not value.signal.type is equivalent to "item" as of api docs
-        if not value.signal.type or value.signal.type == "item" or value.signal.type == "fluid" then
-          if value.count < 0 then
-            local type = value.signal.type or "item"
-            local type_name = type .. "/" .. value.signal.name
-            requests[type_name] = value.count
-          end
+    local requests = {}
+    for _, value in ipairs(signals) do
+      -- not value.signal.type is equivalent to "item" as of api docs
+      if not value.signal.type or value.signal.type == "item" or value.signal.type == "fluid" then
+        if value.count < 0 then
+          local type = value.signal.type or "item"
+          local type_name = type .. "/" .. value.signal.name
+          requests[type_name] = value.count
         end
       end
-
-      umbrella.incoming_trains = umbrella.incoming_trains or {}
-      for train, resource in pairs(umbrella.incoming_trains) do
-        requests[resource.type_name] = requests[resource.type_name] + resource.count
-      end
-
-
-      for type_name, count in pairs(requests) do
-        if -umbrella.requester_config.threshold < count then
-          requests[type_name] = nil
-          goto continue
-        end
-
-        all_requests[type_name] = all_requests[type_name] or {}
-
-        table.insert(all_requests[type_name], {
-          type_name = type_name,
-          stop = umbrella.train_stop.unit_number,
-          count = -count,
-        })
-
-        ::continue::
-      end
-
-      umbrella.requests = requests
     end
-    
+
+    umbrella.incoming_trains = umbrella.incoming_trains or {}
+    for train, resource in pairs(umbrella.incoming_trains) do
+      requests[resource.type_name] = requests[resource.type_name] + resource.count
+    end
+
+    for type_name, count in pairs(requests) do
+      if -umbrella.requester_config.threshold < count then
+        requests[type_name] = nil
+        goto continue
+      end
+
+      all_requests[type_name] = all_requests[type_name] or {}
+
+      table.insert(all_requests[type_name], {
+        type_name = type_name,
+        stop = umbrella.train_stop.unit_number,
+        count = -count,
+      })
+
+      ::continue::
+    end
+
+    umbrella.requests = requests
+
     ::continue::
   end
   return all_requests
 end
 
-function Tick()
-  local available_trains = GetAvaiableTrains()
-  local all_requests = GetReqests()
-  local all_provides = {}
-  MTL_Log(LEVEL.DEBUG, "available_trains: " .. dump(available_trains))
-
-  for stop_id, umbrella in pairs(storage.MTL.stops) do
+function GetProvides()
+  all_provides = {}
+  storage.MTL[ROLE_PROVIDER] = storage.MTL[ROLE_PROVIDER] or {}
+  for _, stop_id in pairs(storage.MTL[ROLE_PROVIDER]) do
+    local umbrella = storage.MT.stops[stop_id]
     if not umbrella.lamp or not umbrella.cc then
       goto continue
     end
@@ -300,46 +298,51 @@ function Tick()
       goto continue
     end
 
-    if umbrella.role == ROLE_PROVIDER then
-      local provides = {}
-      for _, value in ipairs(signals) do
-        -- not value.signal.type is equivalent to "item" as of api docs
-        if not value.signal.type or value.signal.type == "item" or value.signal.type == "fluid" then
-          if umbrella.provider_config.threshold <= value.count then
-            local type = value.signal.type or "item"
-            local type_name = type .. "/" .. value.signal.name
-            provides[type_name] = value.count
-          end
+    local provides = {}
+    for _, value in ipairs(signals) do
+      -- not value.signal.type is equivalent to "item" as of api docs
+      if not value.signal.type or value.signal.type == "item" or value.signal.type == "fluid" then
+        if umbrella.provider_config.threshold <= value.count then
+          local type = value.signal.type or "item"
+          local type_name = type .. "/" .. value.signal.name
+          provides[type_name] = value.count
         end
       end
-
-
-      umbrella.incoming_trains = umbrella.incoming_trains or {}
-      for train, resource in pairs(umbrella.incoming_trains) do
-        provides[resource.type_name] = provides[resource.type_name] - resource.count
-      end
-
-      for type_name, count in pairs(provides) do
-        if umbrella.provider_config.threshold > count then
-          provides[type_name] = nil
-          goto continue
-        end
-
-        all_provides[type_name] = all_provides[type_name] or {}
-
-        table.insert(all_provides[type_name], {
-          type_name = type_name,
-          stop = umbrella.train_stop.unit_number,
-          count = count,
-        })
-        ::continue::
-      end
-
-      umbrella.provides = provides
     end
+
+    umbrella.incoming_trains = umbrella.incoming_trains or {}
+    for train, resource in pairs(umbrella.incoming_trains) do
+      provides[resource.type_name] = provides[resource.type_name] - resource.count
+    end
+
+    for type_name, count in pairs(provides) do
+      if umbrella.provider_config.threshold > count then
+        provides[type_name] = nil
+        goto continue
+      end
+
+      all_provides[type_name] = all_provides[type_name] or {}
+
+      table.insert(all_provides[type_name], {
+        type_name = type_name,
+        stop = umbrella.train_stop.unit_number,
+        count = count,
+      })
+      ::continue::
+    end
+
+    umbrella.provides = provides
+
 
     ::continue::
   end
+end
+
+function Tick()
+  local available_trains = GetAvaiableTrains()
+  local all_requests = GetReqests()
+  local all_provides = GetProvides()
+  MTL_Log(LEVEL.DEBUG, "available_trains: " .. dump(available_trains))
 
   for type_name, requests_list in pairs(all_requests) do
     MTL_Log(LEVEL.DEBUG, "type_name: " .. type_name .. "  requests_list: " .. dump(requests_list))
