@@ -122,7 +122,7 @@ function ReadConfig(umbrella)
   umbrella.provider_config = provider_config
   umbrella.requester_config = requester_config
 
-  storage.MTL[umbrella.role] = storage.MTL[umbrellrole] or {}
+  storage.MTL[umbrella.role] = storage.MTL[umbrella.role] or {}
   storage.MTL[umbrella.role][umbrella.train_stop.unit_number] = true
 
   return true
