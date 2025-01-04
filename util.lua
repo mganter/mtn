@@ -80,3 +80,12 @@ function MTL_Log(level, message)
       game.print(msg)
    end
 end
+
+function string.starts_with(self, start)
+   return self:sub(1, #start) == start
+end
+
+function split_type_name(type_name)
+   local slash_pos = string.find(type_name, "/")
+   return string.sub(type_name, 1, slash_pos-1), string.sub(type_name, slash_pos+1)
+end
