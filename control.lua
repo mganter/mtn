@@ -70,13 +70,9 @@ function RegisterStop(event)
 
     storage.MTL.reverse_lookup[lamp.unit_number] = umbrella.train_stop.unit_number
     storage.MTL.reverse_lookup[cc.unit_number] = umbrella.train_stop.unit_number
+    storage.MTL.stops[train_stop.unit_number] = umbrella
+    script.register_on_object_destroyed(train_stop) -- so that we can react on destruction of the train stop
   end
-
-  local umbrella = storage.MTL.stops[train_stop.unit_number]
-
-  script.register_on_object_destroyed(train_stop) -- so that we can react on destruction of the train stop
-
-  
 end
 
 function UpdateConstantCombinatorConfig(event)
@@ -105,7 +101,6 @@ function DeregisterStop(umbrella)
   end
 end
 
----comment
 ---@param umbrella MaTrainNetwork.TrainStop.Umbrella
 ---@param status MaTrainNetwork.TrainStop.Status
 ---@param count? integer
@@ -193,7 +188,7 @@ function DeconstructStop(event)
   if not umbrella or not DeconstructConstantCombinator(umbrella) then
     MTL_Log(LEVEL.ERROR, "could not destroy constant combinator")
   end
-  if not DeconstructLamp(event.useful_id) then
+  if not umbrella or not DeconstructLamp(umbrella) then
     MTL_Log(LEVEL.ERROR, "could not destory lamp")
   end
 
@@ -210,8 +205,8 @@ function GetAvaiableTrains()
   }
 
   for stop_id, _ in pairs(storage.MTL[Roles.DEPOT]) do
-    umbrella = storage.MTL.stops[stop_id]
-    if not umbrella.lamp or not umbrella.cc then
+    local umbrella = storage.MTL.stops[stop_id]
+    if not umbrella or  not umbrella.lamp or not umbrella.cc then
       goto continue
     end
 
