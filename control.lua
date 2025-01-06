@@ -168,7 +168,7 @@ function ReadConfig(umbrella)
 end
 
 ---comment
----@param event EventData.on_object_destroyed
+---@param event EventData.on_object_destroyed|EventData.on_marked_for_deconstruction
 function DeconstructStop(event)
   if event.name ~= defines.events.on_object_destroyed then
     MTL_Log(LEVEL.ERROR, "invalid event called function DeconstructStop(event)")
@@ -206,7 +206,7 @@ function GetAvaiableTrains()
 
   for stop_id, _ in pairs(storage.MTL[Roles.DEPOT]) do
     local umbrella = storage.MTL.stops[stop_id]
-    if not umbrella or  not umbrella.lamp or not umbrella.cc then
+    if not umbrella or not umbrella.lamp or not umbrella.cc then
       goto continue
     end
 
@@ -529,6 +529,7 @@ function CreateLamp(train_stop)
     MTL_Log(LEVEL.ERROR, "Could not create lamp for stop: " .. train_stop.backer_name)
     return nil
   end
+  ---@diagnostic disable-next-line: inject-field
   lamp.get_or_create_control_behavior().use_colors = true
   lamp.always_on = true
 
