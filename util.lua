@@ -17,22 +17,6 @@ SECTION_GROUP_CONFIG_INDEX = 1
 SECTION_GROUP_OUTPUT = "MLT - Output"
 SECTION_GROUP_OUTPUT_INDEX = 2
 
-ROLE_DEPOT = "role-depot"
-ROLE_REQUESTER = "role-requester"
-ROLE_PROVIDER = "role-provider"
-
-STATUS_DEPOT_READY_TO_RECEIVE_TRAIN = { type = "virtual", name = "signal-cyan", quality = "normal" }
-STATUS_DEPOT_WITH_READY_TRAIN = { type = "virtual", name = "signal-green", quality = "normal" }
-STATUS_DEPOT_TRAIN_ERROR = { type = "virtual", name = "signal-red", quality = "normal" }
-
-STATUS_REQUESTER_REQUESTING_RESOURCE = { type = "virtual", name = "signal-yellow", quality = "normal" }
-STATUS_REQUESTER_WITH_INCOMING_TRAIN = { type = "virtual", name = "signal-green", quality = "normal" }
-
-STATUS_RROVIDER_PROVIDING_RESOURECE = { type = "virtual", name = "signal-green", quality = "normal" }
-STATUS_RROVIDER_WITH_INCOMING_TRAIN = { type = "virtual", name = "signal-yellow", quality = "normal" }
-
-STATUS_TRAIN_STOP_ERROR = { type = "virtual", name = "signal-red", quality = "normal" }
-STATUS_NEUTRAL = { type = "virtual", name = "signal-white", quality = "normal" }
 
 function dump(o)
    if type(o) == 'table' then

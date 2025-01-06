@@ -1,4 +1,5 @@
 require("util")
+require("types")
 
 script.on_init(function() init() end)
 
@@ -14,18 +15,28 @@ script.on_event(defines.events.on_marked_for_deconstruction, function(event) Dec
 script.on_event(defines.events.on_object_destroyed, function(event) DeconstructStop(event) end)
 script.on_event(defines.events.on_tick, function(event) Tick() end)
 
+script.on_event(defines.events.on_train_changed_state, function(event) OnTrainStateChanged(event) end)
+
 function init()
   storage.MTL = storage.MTL or {}
+  ---@type {[uint]:MaTrainNetwork.TrainStop.Umbrella}
   storage.MTL.stops = storage.MTL.stops or {}
-  storage.MTL.depots = storage.MTL.depots or {}
 
-  storage.MTL[ROLE_DEPOT] = storage.MTL[ROLE_DEPOT] or {}
-  storage.MTL[ROLE_PROVIDER] = storage.MTL[ROLE_PROVIDER] or {}
-  storage.MTL[ROLE_REQUESTER] = storage.MTL[ROLE_REQUESTER] or {}
+  ---@type {[uint]:true}
+  storage.MTL[Roles.DEPOT] = storage.MTL[Roles.DEPOT] or {}
+  ---@type {[uint]:true}
+  storage.MTL[Roles.PROVIDER] = storage.MTL[Roles.PROVIDER] or {}
+  ---@type {[uint]:true}
+  storage.MTL[Roles.REQUESTER] = storage.MTL[Roles.REQUESTER] or {}
 
+  ---@type {[uint]:MaTrainNetwork.Train.Order} Train.id to Order map
+  storage.MTL.train_orders = storage.MTL.train_orders or {}
+
+  ---@type {[uint]:uint}
   storage.MTL.reverse_lookup = storage.MTL.reverse_lookup or {}
 end
 
+---@param event EventData.on_built_entity | EventData.on_robot_built_entity | EventData.on_cancelled_deconstruction
 function RegisterStop(event)
   -- is not a train stop
   if event == nil or event.entity == nil or event.entity.name ~= ENTITY_TRAIN_STOP_NAME then
@@ -33,16 +44,39 @@ function RegisterStop(event)
   end
 
   local train_stop = event.entity
-  storage.MTL.stops[train_stop.unit_number] = storage.MTL.stops[train_stop.unit_number] or {}
+  if not storage.MTL.stops[event.entity] then
+    local lamp = CreateLamp(train_stop)
+    if not lamp then
+      train_stop.destroy()
+      MTL_Log(LEVEL.ERROR, "could not create lamp for train stop " .. train_stop.backer_name)
+      return
+    end
+
+    local cc = CreateConstantCombinator(train_stop)
+    if not cc then
+      lamp.destroy()
+      train_stop.destroy()
+      MTL_Log(LEVEL.ERROR, "could not create lamp for train stop " .. train_stop.backer_name)
+      return
+    end
+
+    ---@type MaTrainNetwork.TrainStop.Umbrella
+    local umbrella = {
+      id = event.entity.unit_number,
+      train_stop = event.entity,
+      lamp = lamp,
+      cc = cc,
+    }
+
+    storage.MTL.reverse_lookup[lamp.unit_number] = umbrella.train_stop.unit_number
+    storage.MTL.reverse_lookup[cc.unit_number] = umbrella.train_stop.unit_number
+  end
 
   local umbrella = storage.MTL.stops[train_stop.unit_number]
-  umbrella.train_stop = event.entity
-  umbrella.incoming_trains = umbrella.incoming_trains or {}
 
-  script.register_on_object_destroyed(train_stop)
-  MTL_Log(LEVEL.ERROR, dump(storage.MTL.stops[train_stop.unit_number].train_stop))
+  script.register_on_object_destroyed(train_stop) -- so that we can react on destruction of the train stop
 
-  CreateAdditionalStopEntities(umbrella)
+  
 end
 
 function UpdateConstantCombinatorConfig(event)
@@ -56,26 +90,36 @@ function UpdateConstantCombinatorConfig(event)
 
   CheckConstantCombinatorConfig(umbrella)
   if not ReadConfig(umbrella) then
-    SetStatus(umbrella, STATUS_TRAIN_STOP_ERROR)
+    SetStatus(umbrella, Status.TRAIN_STOP_ERROR)
     -- todo deregister
     return
   end
 
-  SetStatus(umbrella, STATUS_NEUTRAL)
+  SetStatus(umbrella, Status.NEUTRAL)
 end
 
+---@param umbrella MaTrainNetwork.TrainStop.Umbrella
 function DeregisterStop(umbrella)
   if umbrella.role then
     storage.MTL[umbrella.role][umbrella.train_stop.unit_number] = nil
   end
 end
 
+---comment
+---@param umbrella MaTrainNetwork.TrainStop.Umbrella
+---@param status MaTrainNetwork.TrainStop.Status
+---@param count? integer
 function SetStatus(umbrella, status, count)
+  ---@diagnostic disable-next-line: undefined-field
   umbrella.cc.get_or_create_control_behavior().get_section(SECTION_GROUP_OUTPUT_INDEX).set_slot(1,
     { value = status, min = count or 1 })
 end
 
+---@param umbrella MaTrainNetwork.TrainStop.Umbrella
+---@return boolean
 function ReadConfig(umbrella)
+  ---@type LuaLogisticSection
+  ---@diagnostic disable-next-line: undefined-field -- get_or_create_control_behavior() returns [LuaConstantCombinatorControlBehavior]
   local config_section = umbrella.cc.get_or_create_control_behavior().get_section(SECTION_GROUP_CONFIG_INDEX)
 
   local role = {}
@@ -88,15 +132,15 @@ function ReadConfig(umbrella)
     end
 
     if filter.value.type == "virtual" and filter.value.name == SIGNAL_DEPOT then
-      table.insert(role, ROLE_DEPOT)
+      table.insert(role, Roles.DEPOT)
     end
     if filter.value.type == "virtual" and filter.value.name == SIGNAL_PROVIDE_THRESHOLD then
       provider_config.threshold = filter.min
-      table.insert(role, ROLE_PROVIDER)
+      table.insert(role, Roles.PROVIDER)
     end
     if filter.value.type == "virtual" and filter.value.name == SIGNAL_REQUEST_THRESHOLD then
       requester_config.threshold = filter.min
-      table.insert(role, ROLE_REQUESTER)
+      table.insert(role, Roles.REQUESTER)
     end
     ::continue::
   end
@@ -128,10 +172,12 @@ function ReadConfig(umbrella)
   return true
 end
 
+---comment
+---@param event EventData.on_object_destroyed
 function DeconstructStop(event)
   if event.name ~= defines.events.on_object_destroyed then
     MTL_Log(LEVEL.ERROR, "invalid event called function DeconstructStop(event)")
-    return false
+    return
   end
 
   if event.useful_id == 0 or storage.MTL.stops[event.useful_id] == nil then
@@ -139,10 +185,12 @@ function DeconstructStop(event)
     return
   end
 
-  if not DeregisterStop(event.useful_id) then
+  umbrella = storage.MTL[event.useful_id]
+  MTL_Log(LEVEL.ERROR, tostring(event.useful_id) .. type(umbrella))
+  if not umbrella or not DeregisterStop(umbrella) then
     MTL_Log(LEVEL.ERROR, "could not deregister stop")
   end
-  if not DeconstructConstantCombinator(event.useful_id) then
+  if not umbrella or not DeconstructConstantCombinator(umbrella) then
     MTL_Log(LEVEL.ERROR, "could not destroy constant combinator")
   end
   if not DeconstructLamp(event.useful_id) then
@@ -150,23 +198,25 @@ function DeconstructStop(event)
   end
 
   storage.MTL.stops[event.useful_id] = nil
-  --MTL_Log(LEVEL.TRACE, dump(storage))
 end
 
+---comment
+---@return MaTrainNetwork.Train.AvailableTrains
 function GetAvaiableTrains()
+  ---@type MaTrainNetwork.Train.AvailableTrains
   local available_trains = {
     fluid = {},
     item = {},
   }
 
-  for stop_id, _ in pairs(storage.MTL[ROLE_DEPOT]) do
+  for stop_id, _ in pairs(storage.MTL[Roles.DEPOT]) do
     umbrella = storage.MTL.stops[stop_id]
     if not umbrella.lamp or not umbrella.cc then
       goto continue
     end
 
-    if umbrella.role == ROLE_DEPOT then
-      SetStatus(umbrella, STATUS_DEPOT_READY_TO_RECEIVE_TRAIN)
+    if umbrella.role == Roles.DEPOT then
+      SetStatus(umbrella, Status.DEPOT_READY_TO_RECEIVE_TRAIN)
 
       local train = umbrella.train_stop.get_stopped_train()
       if not train then
@@ -174,13 +224,13 @@ function GetAvaiableTrains()
       end
 
       if #train.carriages < 2 then
-        SetStatus(umbrella, STATUS_DEPOT_TRAIN_ERROR)
+        SetStatus(umbrella, Status.DEPOT_TRAIN_ERROR)
         MTL_Log(LEVEL.INFO, "train in stop \"" .. umbrella.train_stop.backer_name .. "\" has too few carriages")
         goto continue
       end
 
       if train.carriages[2].prototype.type ~= "cargo-wagon" and train.carriages[2].prototype.type ~= "fluid-wagon" then
-        SetStatus(umbrella, STATUS_DEPOT_TRAIN_ERROR)
+        SetStatus(umbrella, Status.DEPOT_TRAIN_ERROR)
         MTL_Log(LEVEL.INFO,
           "train in stop \"" .. umbrella.train_stop.backer_name ..
           "\" has to have cargo wagon or fluid wagon on 2nd place")
@@ -190,7 +240,7 @@ function GetAvaiableTrains()
       carriage_type = (train.carriages[2].prototype.type == "fluid-wagon" and "fluid") or "item"
 
       if carriage_type == "item" and #train.carriages[2].get_output_inventory().get_contents() ~= 0 then
-        SetStatus(umbrella, STATUS_DEPOT_TRAIN_ERROR)
+        SetStatus(umbrella, Status.DEPOT_TRAIN_ERROR)
         MTL_Log(LEVEL.INFO,
           "train in stop \"" .. umbrella.train_stop.backer_name ..
           "\" is not empty and therefor not listed as available train")
@@ -198,17 +248,17 @@ function GetAvaiableTrains()
       end
 
       if carriage_type == "fluid" and not train.carriages[2].get_fluid_contents() then
-        SetStatus(umbrella, STATUS_DEPOT_TRAIN_ERROR)
+        SetStatus(umbrella, Status.DEPOT_TRAIN_ERROR)
         MTL_Log(LEVEL.INFO,
-          "train in stop \"" .. umbrella.train_stobacker_name ..
+          "train in stop \"" .. umbrella.train_stop.backer_name ..
           "\" is not empty and therefor not listed as available train")
         goto continue
       end
 
       if umbrella.assigned_train.id ~= train.id then
-        SetStatus(umbrella, STATUS_DEPOT_TRAIN_ERROR)
+        SetStatus(umbrella, Status.DEPOT_TRAIN_ERROR)
         MTL_Log(LEVEL.ERROR,
-          "train in stop \"" .. umbrella.train_stobacker_name ..
+          "train in stop \"" .. umbrella.train_stop.backer_name ..
           "\" is not the train assigned to this depot")
         goto continue
       end
@@ -217,26 +267,30 @@ function GetAvaiableTrains()
       local slot_capacity = (carriage_type == "item" and train.carriages[2].get_output_inventory().get_bar() - 1) or 0
 
       umbrella.assigned_train = train
-      table.insert(available_trains[carriage_type], {
+
+      ---@type MaTrainNetwork.Train.TrainInfo
+      train_info = {
         train = train,
         slot_capacity = slot_capacity,
-        fluid_cacity = fluid_capacity,
+        fluid_capacity = fluid_capacity,
         depot = stop_id,
-      })
+      }
+      table.insert(available_trains[carriage_type], train_info)
 
-      SetStatus(umbrella, STATUS_DEPOT_WITH_READY_TRAIN)
+      SetStatus(umbrella, Status.DEPOT_WITH_READY_TRAIN)
     end
     ::continue::
   end
-  MTL_Log(LEVEL.DEBUG, "available_trains: " .. dump(available_trains))
+
   return available_trains
 end
 
 function GetReqests()
+  ---@type {[MaTrainNetwork.ResourceTypeName]:MaTrainNetwork.Request[]}
   all_requests = {}
-  storage.MTL[ROLE_REQUESTER] = storage.MTL[ROLE_REQUESTER] or {}
+  storage.MTL[Roles.REQUESTER] = storage.MTL[Roles.REQUESTER] or {}
 
-  for stop_id, _ in pairs(storage.MTL[ROLE_REQUESTER]) do
+  for stop_id, _ in pairs(storage.MTL[Roles.REQUESTER]) do
     local umbrella = storage.MTL.stops[stop_id]
 
     if not umbrella.lamp or not umbrella.cc then
@@ -249,21 +303,25 @@ function GetReqests()
       goto continue
     end
 
+    ---@type {[MaTrainNetwork.ResourceTypeName]:uint}
     local requests = {}
     for _, value in ipairs(signals) do
       -- not value.signal.type is equivalent to "item" as of api docs
       if not value.signal.type or value.signal.type == "item" or value.signal.type == "fluid" then
         if value.count < 0 then
-          local type = value.signal.type or "item"
-          local type_name = type .. "/" .. value.signal.name
+          local type_name = {
+            type = value.signal.type or "item",
+            name = value.signal.name,
+          }
           requests[type_name] = value.count
         end
       end
     end
 
     umbrella.incoming_trains = umbrella.incoming_trains or {}
-    for train, resource in pairs(umbrella.incoming_trains) do
-      requests[resource.type_name] = requests[resource.type_name] + resource.count
+    for _, order in ipairs(umbrella.incoming_trains) do
+      requests[order.resource]
+      = requests[order.resource] + order.count
     end
 
     for type_name, count in pairs(requests) do
@@ -274,16 +332,16 @@ function GetReqests()
 
       all_requests[type_name] = all_requests[type_name] or {}
 
-      table.insert(all_requests[type_name], {
+      ---@type MaTrainNetwork.Request
+      local request = {
         type_name = type_name,
         stop = umbrella.train_stop.unit_number,
         count = -count,
-      })
+      }
+      table.insert(all_requests[type_name], request)
 
       ::continue::
     end
-
-    umbrella.requests = requests
 
     ::continue::
   end
@@ -292,8 +350,8 @@ end
 
 function GetProvides()
   all_provides = {}
-  storage.MTL[ROLE_PROVIDER] = storage.MTL[ROLE_PROVIDER] or {}
-  for stop_id, _ in pairs(storage.MTL[ROLE_PROVIDER]) do
+  storage.MTL[Roles.PROVIDER] = storage.MTL[Roles.PROVIDER] or {}
+  for stop_id, _ in pairs(storage.MTL[Roles.PROVIDER]) do
     local umbrella = storage.MTL.stops[stop_id]
     if not umbrella.lamp or not umbrella.cc then
       goto continue
@@ -309,12 +367,17 @@ function GetProvides()
     for _, value in ipairs(signals) do
       -- not value.signal.type is equivalent to "item" as of api docs
       if not value.signal.type or value.signal.type == "item" or value.signal.type == "fluid" then
+        MTL_Log(LEVEL.DEBUG, "value.signal: " .. dump(value.signal) .. " " .. value.count)
         if umbrella.provider_config.threshold <= value.count then
           local type = value.signal.type or "item"
           local type_name = type .. "/" .. value.signal.name
           provides[type_name] = value.count
         end
       end
+    end
+
+    if #provides == 0 then
+      goto continue
     end
 
     umbrella.incoming_trains = umbrella.incoming_trains or {}
@@ -344,6 +407,7 @@ function GetProvides()
     ::continue::
   end
 
+  MTL_Log(LEVEL.DEBUG, "all_provides: " .. dump(all_provides))
   return all_provides
 end
 
@@ -367,15 +431,16 @@ function Tick()
           goto continue
         end
 
-        sent_amount = (request.count > provide.count and provide.count) or request.count
-        carriage_type = (type_name:starts_with("item") and "item") or "fluid"
+        local sent_amount = (request.count > provide.count and provide.count) or request.count
+        local carriage_type = type_name.type
 
         MTL_Log(LEVEL.DEBUG, "type is " .. carriage_type)
         if #available_trains[carriage_type] == 0 then
           MTL_Log(LEVEL.DEBUG, "no available train for " .. carriage_type .. " found")
           goto continue
         end
-        train_info = available_trains[carriage_type][#available_trains[carriage_type]]
+        ---@type MaTrainNetwork.Train.TrainInfo
+        local train_info = available_trains[carriage_type][#available_trains[carriage_type]]
         table.remove(available_trains[carriage_type])
 
         provide.count = provide.count - sent_amount
@@ -387,75 +452,22 @@ function Tick()
 
         MTL_Log(LEVEL.DEBUG, "train info" .. dump(train_info))
         local type, name = split_type_name(type_name)
-        MTL_Log(LEVEL.DEBUG, "type: " .. type.. " name: "..name)
+        MTL_Log(LEVEL.DEBUG, "type: " .. type .. " name: " .. name)
         storage.MTL.stops[request.stop].incoming_trains = storage.MTL.stops[request.stop].incoming_trains or {}
-        storage.MTL.stops[request.stop].incoming_trains[train_info] = {
-          type_name = type_name,
+        ---@type MaTrainNetwork.Train.Order
+        train_order = {
+          train = train_info.train,
+          resource = type_name,
           count = sent_amount,
+          depot = train_info.depot,
+          provider = provide.stop,
+          requester = request.stop,
         }
-        storage.MTL.stops[provide.stop].incoming_trains = storage.MTL.stops[request.stop].incoming_trains or {}
-        storage.MTL.stops[provide.stop].incoming_trains[train_info] = {
-          type_name = type_name,
-          count = -sent_amount,
-        }
+        storage.MTL.stops[request.stop].incoming_trains[train_order.train.id] = train_order
+        storage.MTL.stops[provide.stop].incoming_trains[train_order.train.id] = train_order
+        storage.MTL.train_orders[train_info.train.id] = train_order
 
-        train_info.train.schedule = {
-          current = 1,
-          records = {
-            {
-              station = storage.MTL.stops[provide.stop].train_stop.backer_name,
-              wait_conditions = {
-                {
-                  compare_type = "or",
-                  type = (type == "item" and "item_count") or "fluid_count",
-                  condition = {
-                    first_signal = { type = type, name = name },
-                    comparator = ">=",
-                    constant = sent_amount,
-                  }
-                },
-                {
-                  compare_type = "or",
-                  type = "time",
-                  ticks = "7200",
-                },
-                {
-                  compare_type = "or",
-                  type = "inactivity",
-                  ticks = "500",
-                }
-              },
-            },
-            {
-              station = storage.MTL.stops[request.stop].train_stop.backer_name,
-              wait_conditions = {
-                  {
-                    compare_type = "or",
-                    type = "empty",
-                    condition = {
-                      first_signal = { type = type, name = name },
-                      comparator = ">=",
-                      constant = sent_amount,
-                    }
-                  },
-                  {
-                    compare_type = "or",
-                    type = "time",
-                    ticks = "7200",
-                  }
-              }
-            },
-            {
-              station = storage.MTL.stops[train_info.depot].train_stop.backer_name,
-              wait_conditions = {
-                {
-                  type = "time",
-                  ticks = 300,
-                }
-              }
-            },
-          }
-        }
+        CreateTrainSchedule(train_order)
 
         ::continue::
       end
@@ -468,85 +480,101 @@ function DispatchTrain(start, stop, train_info, resource, count)
   --storage.MTL.stops[train_info.depot].train
 end
 
-function DeconstructConstantCombinator(train_stop_unit_number)
-  if not storage.MTL.sts[train_stop_unit_number].cc then
+---@param umbrella MaTrainNetwork.TrainStop.Umbrella
+function DeconstructConstantCombinator(umbrella)
+  if not umbrella.cc then
     return true
   end
 
-  local cc_id = storage.MTL.stops[train_stop_unit_number].cc.unit_number
+  local cc_id = umbrella.cc.unit_number
 
-  if not storage.MTL.stops[train_stop_unit_number].cc.destroy() then
+  if not umbrella.cc.destroy() then
     MTL_Log(LEVEL.ERROR, "failed to destroy constant combinator")
     return false
   end
 
-  storage.MTL.reverse_lookup[cc_id] = nil
-  storage.MTL.stops[train_stop_unit_number].cc = nil
+  if cc_id then
+    storage.MTL.reverse_lookup[cc_id] = nil
+  end
+  umbrella.cc = nil
   return true
 end
 
-function DeconstructLamp(train_stop_unit_number)
-  if not storage.MTL.stops[train_stop_unit_number].lamp then
+---@param umbrella MaTrainNetwork.TrainStop.Umbrella
+---@return boolean
+function DeconstructLamp(umbrella)
+  if not umbrella.lamp then
     return true
   end
 
-  local lamp_id = storage.MTL.stops[train_stop_unit_number].lamp.unit_number
+  if umbrella.lamp.unit_number then
+    storage.MTL.reverse_lookup[umbrella.lamp.unit_number] = nil
+  end
 
-  if not storage.MTL.stops[train_stop_unit_number].lamp.destroy() then
+  if not umbrella.lamp.destroy() then
     MTL_Log(LEVEL.ERROR, "failed to destroy lamp")
     return false
   end
 
-  storage.MTL.reverse_lookup[lamp_id] = nil
-  storage.MTL.stops[train_stop_unit_number].lamp = nil
+  umbrella.lamp = nil
   return true
 end
 
-function CreateAdditionalStopEntities(umbrella)
-  CreateLamp(umbrella)
-  CreateConstantCombinator(umbrella)
-  CheckConstantCombinatorConfig(umbrella)
-  ConnectConstantCombinatorAndLampCircuit(umbrella)
-end
-
-function CreateLamp(umbrella)
-  if umbrella.lamp then
-    MTL_Log(LEVEL.TRACE, "lamp was already created for \"" .. umbrella.train_stop.backer_name .. "\"")
-    return
-  end
-
-  local lamp = umbrella.train_stop.surface.create_entity({
+---@param train_stop LuaEntity
+---@return LuaEntity? -- lamp created
+function CreateLamp(train_stop)
+  local lamp = train_stop.surface.create_entity({
     name = ENTITY_TRAIN_STOP_LAMP_NAME,
     snap_to_grid = true,
-    direction = umbrella.train_stop.direction,
-    position = { umbrella.train_stop.position.x - 2, umbrella.train_stop.position.y - 1 },
-    force = umbrella.train_stop.force
+    direction = train_stop.direction,
+    position = { train_stop.position.x - 2, train_stop.position.y - 1 },
+    force = train_stop.force
   })
+  if not lamp then
+    MTL_Log(LEVEL.ERROR, "Could not create lamp for stop: " .. train_stop.backer_name)
+    return nil
+  end
   lamp.get_or_create_control_behavior().use_colors = true
   lamp.always_on = true
 
-  storage.MTL.reverse_lookup[lamp.unit_number] = umbrella.train_stop.unit_number
-  umbrella.lamp = lamp
-
   MTL_Log(LEVEL.TRACE, "created lamp for \"" .. umbrella.train_stop.backer_name .. "\"")
+  return lamp
 end
 
-function CreateConstantCombinator(umbrella)
-  if umbrella.cc then
-    MTL_Log(LEVEL.TRACE, "constant combinator was already created for \"" .. umbrella.train_stop.backer_name .. "\"")
-    return
-  end
-  local cc = umbrella.train_stop.surface.create_entity({
+---comment
+---@param train_stop LuaEntity
+---@return LuaEntity? -- constant combinator created
+function CreateConstantCombinator(train_stop)
+  local cc = train_stop.surface.create_entity({
     name = ENTITY_TRAIN_STOP_CC_NAME,
     snap_to_grid = true,
     direction = umbrella.train_stop.direction,
     position = { umbrella.train_stop.position.x - 2, umbrella.train_stop.position.y },
     force = umbrella.train_stop.force
   })
+  if not cc then
+    MTL_Log(LEVEL.ERROR, "Could not create constant combinator for stop: " .. train_stop.backer_name)
+    return nil
+  end
 
-  storage.MTL.reverse_lookup[cc.unit_number] = umbrella.train_stop.unit_number
-  umbrella.cc = cc
-  MTL_Log(LEVEL.TRACE, "created constant combinator for stop \"" .. umbrella.train_stop.backer_name .. "\"")
+  ---@type LuaConstantCombinatorControlBehavior
+  ---@diagnostic disable-next-line: assign-type-mismatch
+  local control_behavior = cc.get_or_create_control_behavior()
+
+  if control_behavior.sections_count < 2 then
+    for i = control_behavior.sections_count, 1, -1 do
+      control_behavior.remove_section(i)
+    end
+
+    control_behavior.add_section()
+    control_behavior.add_section()
+    control_behavior.get_section(SECTION_GROUP_OUTPUT_INDEX).filters = {}
+
+    MTL_Log(LEVEL.TRACE, "fixed constant combinator behavior for stop \"" .. umbrella.train_stop.backer_name .. "\"")
+  end
+
+  MTL_Log(LEVEL.TRACE, "created constant combinator for stop \"" .. train_stop.backer_name .. "\"")
+  return cc
 end
 
 function CheckConstantCombinatorConfig(umbrella)
@@ -585,4 +613,85 @@ function ConnectConstantCombinatorAndLampCircuit(umbrella)
 
   MTL_Log(LEVEL.TRACE,
     "created circuit connection betweend constant combinator and lamp for \"" .. umbrella.train_stop.backer_name .. "\"")
+end
+
+function OnTrainStateChanged(event)
+  storage.MTL.train_orders = storage.MTL.train_orders or {}
+  if not storage.MTL.train_orders[event.train.id] then
+    return
+  end
+
+  if event.old_state == defines.train_state.arrive_station and event.train.state == defines.train_state.wait_station then
+    OnTrainArriving(event)
+  end
+end
+
+function OnTrainDeparture(event)
+
+end
+
+function OnTrainArriving(event)
+  MTL_Log(LEVEL.DEBUG, "Train " .. event.train.backer_name .. " arrived at " .. event.train.station.backer_name)
+end
+
+---comment
+---@param order MaTrainNetwork.Train.Order
+function CreateTrainSchedule(order)
+  order.train.schedule = {
+    current = 1,
+    records = {
+      {
+        station = storage.MTL.stops[order.provider].train_stop.backer_name,
+        wait_conditions = {
+          {
+            compare_type = "or",
+            type = (type == "item" and "item_count") or "fluid_count",
+            condition = {
+              first_signal = { type = tostring(order.resource.type), name = order.resource.name },
+              comparator = ">=",
+              constant = order.count,
+            }
+          },
+          {
+            compare_type = "or",
+            type = "time",
+            ticks = 7200,
+          },
+          {
+            compare_type = "or",
+            type = "inactivity",
+            ticks = 500,
+          }
+        },
+      },
+      {
+        station = storage.MTL.stops[order.requester].train_stop.backer_name,
+        wait_conditions = {
+          {
+            compare_type = "or",
+            type = "empty",
+            condition = {
+              first_signal = { type = tostring(order.resource.type), name = order.resource.name },
+              comparator = ">=",
+              constant = order.count,
+            }
+          },
+          {
+            compare_type = "or",
+            type = "time",
+            ticks = 7200,
+          }
+        }
+      },
+      {
+        station = storage.MTL.stops[train_info.depot].train_stop.backer_name,
+        wait_conditions = {
+          {
+            type = "time",
+            ticks = 300,
+          }
+        }
+      },
+    }
+  }
 end
