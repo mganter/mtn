@@ -113,7 +113,6 @@ end
 ---@param status MaTrainNetwork.TrainStop.Status
 ---@param count? integer
 function SetStatus(umbrella, status, count)
-  MTL_Log(LEVEL.TRACE, type(umbrella).." "..type(umbrella.cc).." "..type(umbrella.cc.get_or_create_control_behavior()).." "..type(umbrella.cc.get_or_create_control_behavior().get_section(SECTION_GROUP_OUTPUT_INDEX)))
   ---@diagnostic disable-next-line: undefined-field
   umbrella.cc.get_or_create_control_behavior().get_section(SECTION_GROUP_OUTPUT_INDEX).set_slot(1,
     { value = status, min = count or 1 })
@@ -561,7 +560,7 @@ function CreateConstantCombinator(train_stop)
     MTL_Log(LEVEL.ERROR, "Could not create constant combinator for stop: " .. train_stop.backer_name)
     return nil
   end
-  
+
   CheckConstantCombinatorConfig(cc)
 
   MTL_Log(LEVEL.TRACE, "created constant combinator for stop \"" .. train_stop.backer_name .. "\"")
