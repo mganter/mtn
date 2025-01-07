@@ -37,7 +37,7 @@ LEVEL = {
    SILENT = 4,
 }
 
-function MTL_Log(level, message)
+function MTN_Log(level, message)
    local msg
    if level == LEVEL.TRACE then
       msg = "MLT TRACE: " .. message
@@ -60,6 +60,9 @@ function MTL_Log(level, message)
    end
 end
 
+---@param self string
+---@param start string
+---@return boolean
 function string.starts_with(self, start)
    return self:sub(1, #start) == start
 end
