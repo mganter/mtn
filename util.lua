@@ -37,9 +37,6 @@ LEVEL = {
    SILENT = 4,
 }
 
-local level_to_log = 0
-local level_to_user = 0
-
 function MTL_Log(level, message)
    local msg
    if level == LEVEL.TRACE then

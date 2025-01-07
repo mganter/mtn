@@ -3,7 +3,7 @@ data:extend({
         type = "string-setting",
         name = "mtn-file-log-level",
         setting_type = "runtime-global",
-        default_value = "ERROR",
+        default_value = "INFO",
         allowed_values = {
             "TRACE",
             "DEBUG",
