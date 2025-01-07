@@ -177,7 +177,6 @@ function ReadConfig(umbrella)
   return true
 end
 
----comment
 ---@param event EventData.on_object_destroyed|EventData.on_marked_for_deconstruction
 function DeconstructStop(event)
   if event.name ~= defines.events.on_object_destroyed then
@@ -481,10 +480,6 @@ function Tick()
   end
 end
 
-function DispatchTrain(start, stop, train_info, resource, count)
-  --storage.MTL.stops[train_info.depot].train
-end
-
 ---@param umbrella MaTrainNetwork.TrainStop.Umbrella
 function DeconstructConstantCombinator(umbrella)
   if not umbrella.cc then
@@ -624,7 +619,6 @@ function OnTrainArriving(event)
   MTL_Log(LEVEL.DEBUG, "Train " .. event.train.backer_name .. " arrived at " .. event.train.station.backer_name)
 end
 
----comment
 ---@param order MaTrainNetwork.Train.Order
 function CreateTrainSchedule(order)
   order.train.schedule = {
