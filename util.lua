@@ -72,8 +72,8 @@ end
 function from_slash_notation(type_name)
    local slash_pos = string.find(type_name, "/")
    return {
-      type = string.sub(type_name, 1, slash_pos-1), 
-      name = string.sub(type_name, slash_pos+1)
+      type = string.sub(type_name, 1, slash_pos - 1),
+      name = string.sub(type_name, slash_pos + 1)
    }
 end
 

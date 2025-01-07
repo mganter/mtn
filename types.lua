@@ -16,7 +16,7 @@ do
     ---@field threshold int
     local ProviderConfig = {
     }
-    
+
     ---@class (exact) MaTrainNetwork.TrainStop.RequesterConfig
     ---@field threshold int
     local RequesterConfig = {
@@ -29,7 +29,7 @@ do
     ---@field requester uint -- unit_number of requested train
     ---@field provider uint -- unit_number of requested train
     ---@field depot uint -- unit_number of requested train
-    ---@field resource MaTrainNetwork.ResourceTypeName 
+    ---@field resource MaTrainNetwork.ResourceTypeName
     ---@field count uint -- amount of resource to be transported
     ---@field current_stop? uint -- unit_number of the last reached stop
     local Order = {
@@ -59,7 +59,7 @@ do
     ---@class (exact) MaTrainNetwork.Train.TrainInfo
     ---@field train LuaTrain
     ---@field depot uint
-    ---@field fluid_capacity uint 
+    ---@field fluid_capacity uint
     ---@field slot_capacity uint
     local TrainInfo = {
     }
@@ -68,10 +68,10 @@ do
     ---@field type CarriageType
     ---@field name string
     local ResourceTypeName = {
-    } 
+    }
 end
 
----@enum MaTrainNetwork.TrainStop.Roles 
+---@enum MaTrainNetwork.TrainStop.Roles
 Roles = {
     DEPOT = "role-depot",
     REQUESTER = "role-requester",
@@ -89,13 +89,13 @@ Status = {
     DEPOT_READY_TO_RECEIVE_TRAIN = { type = "virtual", name = "signal-cyan", quality = "normal" },
     DEPOT_WITH_READY_TRAIN = { type = "virtual", name = "signal-green", quality = "normal" },
     DEPOT_TRAIN_ERROR = { type = "virtual", name = "signal-red", quality = "normal" },
-    
+
     REQUESTER_REQUESTING_RESOURCE = { type = "virtual", name = "signal-yellow", quality = "normal" },
     REQUESTER_WITH_INCOMING_TRAIN = { type = "virtual", name = "signal-green", quality = "normal" },
-    
+
     RROVIDER_PROVIDING_RESOURECE = { type = "virtual", name = "signal-green", quality = "normal" },
     RROVIDER_WITH_INCOMING_TRAIN = { type = "virtual", name = "signal-yellow", quality = "normal" },
-    
+
     TRAIN_STOP_ERROR = { type = "virtual", name = "signal-red", quality = "normal" },
     NEUTRAL = { type = "virtual", name = "signal-white", quality = "normal" },
 }
