@@ -68,6 +68,8 @@ function RegisterStop(event)
       lamp = lamp,
       cc = cc,
     }
+    
+    ConnectConstantCombinatorAndLampCircuit(umbrella)
 
     storage.MTL.reverse_lookup[lamp.unit_number] = umbrella.train_stop.unit_number
     storage.MTL.reverse_lookup[cc.unit_number] = umbrella.train_stop.unit_number
@@ -581,8 +583,6 @@ function CheckConstantCombinatorConfig(cc)
     control_behavior.add_section()
     control_behavior.add_section()
     control_behavior.get_section(SECTION_GROUP_OUTPUT_INDEX).filters = {}
-
-    MTL_Log(LEVEL.TRACE, "fixed constant combinator behavior for stop \"" .. umbrella.train_stop.backer_name .. "\"")
   end
 end
 
