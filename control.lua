@@ -45,6 +45,7 @@ function RegisterStop(event)
 
   local train_stop = event.entity
   if not storage.MTL.stops[event.entity] then
+
     local lamp = CreateLamp(train_stop)
     if not lamp then
       train_stop.destroy()
@@ -73,6 +74,11 @@ function RegisterStop(event)
     storage.MTL.stops[train_stop.unit_number] = umbrella
     script.register_on_object_destroyed(train_stop) -- so that we can react on destruction of the train stop
   end
+
+  if not ReadConfig(storage.MTL.stops[train_stop.unit_number]) then
+    SetStatus(storage.MTL.stops[train_stop.unit_number], Status.TRAIN_STOP_ERROR)
+    return
+  end
 end
 
 function UpdateConstantCombinatorConfig(event)
@@ -84,7 +90,7 @@ function UpdateConstantCombinatorConfig(event)
   local umbrella = storage.MTL.stops[train_stop_number]
   MTL_Log(LEVEL.DEBUG, "got constant combinator update for " .. umbrella.train_stop.backer_name)
 
-  CheckConstantCombinatorConfig(umbrella)
+  CheckConstantCombinatorConfig(umbrella.cc)
   if not ReadConfig(umbrella) then
     SetStatus(umbrella, Status.TRAIN_STOP_ERROR)
     -- todo deregister
@@ -95,16 +101,19 @@ function UpdateConstantCombinatorConfig(event)
 end
 
 ---@param umbrella MaTrainNetwork.TrainStop.Umbrella
+---@return boolean -- successful or not
 function DeregisterStop(umbrella)
   if umbrella.role then
-    storage.MTL[umbrella.role][umbrella.train_stop.unit_number] = nil
+    storage.MTL[umbrella.role][umbrella.id] = nil
   end
+  return true
 end
 
 ---@param umbrella MaTrainNetwork.TrainStop.Umbrella
 ---@param status MaTrainNetwork.TrainStop.Status
 ---@param count? integer
 function SetStatus(umbrella, status, count)
+  MTL_Log(LEVEL.TRACE, type(umbrella).." "..type(umbrella.cc).." "..type(umbrella.cc.get_or_create_control_behavior()).." "..type(umbrella.cc.get_or_create_control_behavior().get_section(SECTION_GROUP_OUTPUT_INDEX)))
   ---@diagnostic disable-next-line: undefined-field
   umbrella.cc.get_or_create_control_behavior().get_section(SECTION_GROUP_OUTPUT_INDEX).set_slot(1,
     { value = status, min = count or 1 })
@@ -180,7 +189,7 @@ function DeconstructStop(event)
     return
   end
 
-  umbrella = storage.MTL[event.useful_id]
+  umbrella = storage.MTL.stops[event.useful_id]
   MTL_Log(LEVEL.ERROR, tostring(event.useful_id) .. type(umbrella))
   if not umbrella or not DeregisterStop(umbrella) then
     MTL_Log(LEVEL.ERROR, "could not deregister stop")
@@ -533,7 +542,7 @@ function CreateLamp(train_stop)
   lamp.get_or_create_control_behavior().use_colors = true
   lamp.always_on = true
 
-  MTL_Log(LEVEL.TRACE, "created lamp for \"" .. umbrella.train_stop.backer_name .. "\"")
+  MTL_Log(LEVEL.TRACE, "created lamp for \"" .. train_stop.backer_name .. "\"")
   return lamp
 end
 
@@ -544,15 +553,23 @@ function CreateConstantCombinator(train_stop)
   local cc = train_stop.surface.create_entity({
     name = ENTITY_TRAIN_STOP_CC_NAME,
     snap_to_grid = true,
-    direction = umbrella.train_stop.direction,
-    position = { umbrella.train_stop.position.x - 2, umbrella.train_stop.position.y },
-    force = umbrella.train_stop.force
+    direction = train_stop.direction,
+    position = { train_stop.position.x - 2, train_stop.position.y },
+    force = train_stop.force
   })
   if not cc then
     MTL_Log(LEVEL.ERROR, "Could not create constant combinator for stop: " .. train_stop.backer_name)
     return nil
   end
+  
+  CheckConstantCombinatorConfig(cc)
 
+  MTL_Log(LEVEL.TRACE, "created constant combinator for stop \"" .. train_stop.backer_name .. "\"")
+  return cc
+end
+
+---@param cc LuaEntity constant combinator
+function CheckConstantCombinatorConfig(cc)
   ---@type LuaConstantCombinatorControlBehavior
   ---@diagnostic disable-next-line: assign-type-mismatch
   local control_behavior = cc.get_or_create_control_behavior()
@@ -567,28 +584,6 @@ function CreateConstantCombinator(train_stop)
     control_behavior.get_section(SECTION_GROUP_OUTPUT_INDEX).filters = {}
 
     MTL_Log(LEVEL.TRACE, "fixed constant combinator behavior for stop \"" .. umbrella.train_stop.backer_name .. "\"")
-  end
-
-  MTL_Log(LEVEL.TRACE, "created constant combinator for stop \"" .. train_stop.backer_name .. "\"")
-  return cc
-end
-
-function CheckConstantCombinatorConfig(umbrella)
-  local cc = umbrella.cc
-  if not cc then
-    MTL_Log(LEVEL.ERROR, "could not find constant combinator for \"" .. umbrella.train_stop.backer_name .. "\"")
-  end
-  -- redo_cc_config if sections do not match
-  if cc.get_or_create_control_behavior().sections_count < 2 then
-    for i = cc.get_or_create_control_behavior().sections_count, 1, -1 do
-      cc.get_or_create_control_behavior().remove_section(i)
-    end
-
-    cc.get_or_create_control_behavior().add_section()
-    cc.get_or_create_control_behavior().add_section()
-    cc.get_or_create_control_behavior().get_section(SECTION_GROUP_OUTPUT_INDEX).filters = {}
-
-    MTL_Log(LEVEL.TRACE, "fixed constant combinator behavior for \"" .. umbrella.train_stop.backer_name .. "\"")
   end
 end
 
