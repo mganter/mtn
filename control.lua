@@ -45,7 +45,6 @@ function RegisterStop(event)
 
   local train_stop = event.entity
   if not storage.MTL.stops[event.entity] then
-
     local lamp = CreateLamp(train_stop)
     if not lamp then
       train_stop.destroy()
@@ -68,7 +67,7 @@ function RegisterStop(event)
       lamp = lamp,
       cc = cc,
     }
-    
+
     ConnectConstantCombinatorAndLampCircuit(umbrella)
 
     storage.MTL.reverse_lookup[lamp.unit_number] = umbrella.train_stop.unit_number
@@ -204,7 +203,6 @@ function DeconstructStop(event)
   storage.MTL.stops[event.useful_id] = nil
 end
 
----comment
 ---@return MaTrainNetwork.Train.AvailableTrains
 function GetAvaiableTrains()
   ---@type MaTrainNetwork.Train.AvailableTrains
@@ -259,6 +257,10 @@ function GetAvaiableTrains()
         goto continue
       end
 
+      if not umbrella.assigned_train then
+        umbrella.assigned_train = train
+      end
+      
       if umbrella.assigned_train.id ~= train.id then
         SetStatus(umbrella, Status.DEPOT_TRAIN_ERROR)
         MTL_Log(LEVEL.ERROR,
@@ -269,8 +271,6 @@ function GetAvaiableTrains()
 
       local fluid_capacity = (carriage_type == "fluid" and train.carriages[2].prototype.fluid_capacity) or 0
       local slot_capacity = (carriage_type == "item" and train.carriages[2].get_output_inventory().get_bar() - 1) or 0
-
-      umbrella.assigned_train = train
 
       ---@type MaTrainNetwork.Train.TrainInfo
       train_info = {
@@ -289,9 +289,10 @@ function GetAvaiableTrains()
   return available_trains
 end
 
+---@return { [string]: MaTrainNetwork.Request[] }
 function GetReqests()
-  ---@type {[MaTrainNetwork.ResourceTypeName]:MaTrainNetwork.Request[]}
-  all_requests = {}
+  ---@type {[string]:MaTrainNetwork.Request[]}
+  local all_requests = {}
   storage.MTL[Roles.REQUESTER] = storage.MTL[Roles.REQUESTER] or {}
 
   for stop_id, _ in pairs(storage.MTL[Roles.REQUESTER]) do
@@ -307,17 +308,15 @@ function GetReqests()
       goto continue
     end
 
-    ---@type {[MaTrainNetwork.ResourceTypeName]:uint}
+    ---@type {[string]:uint} -- type_name to count map
     local requests = {}
     for _, value in ipairs(signals) do
       -- not value.signal.type is equivalent to "item" as of api docs
       if not value.signal.type or value.signal.type == "item" or value.signal.type == "fluid" then
         if value.count < 0 then
-          local type_name = {
-            type = value.signal.type or "item",
-            name = value.signal.name,
-          }
-          requests[type_name] = value.count
+          local type = value.signal.type or "item"
+          local name = value.signal.name
+          requests[type .. "/" .. name] = value.count
         end
       end
     end
@@ -338,7 +337,7 @@ function GetReqests()
 
       ---@type MaTrainNetwork.Request
       local request = {
-        type_name = type_name,
+        type_name = split_type_name(type_name),
         stop = umbrella.train_stop.unit_number,
         count = -count,
       }
@@ -352,8 +351,9 @@ function GetReqests()
   return all_requests
 end
 
-function GetProvides()
-  all_provides = {}
+function GetOffers()
+  ---@type {[string]:MaTrainNetwork.Offer[]}
+  local all_offers = {}
   storage.MTL[Roles.PROVIDER] = storage.MTL[Roles.PROVIDER] or {}
   for stop_id, _ in pairs(storage.MTL[Roles.PROVIDER]) do
     local umbrella = storage.MTL.stops[stop_id]
@@ -367,7 +367,8 @@ function GetProvides()
       goto continue
     end
 
-    local provides = {}
+    ---@type {[string]:integer}
+    local offers = {}
     for _, value in ipairs(signals) do
       -- not value.signal.type is equivalent to "item" as of api docs
       if not value.signal.type or value.signal.type == "item" or value.signal.type == "fluid" then
@@ -375,50 +376,49 @@ function GetProvides()
         if umbrella.provider_config.threshold <= value.count then
           local type = value.signal.type or "item"
           local type_name = type .. "/" .. value.signal.name
-          provides[type_name] = value.count
+          offers[type_name] = value.count
         end
       end
     end
 
-    if #provides == 0 then
+    if #offers == 0 then
       goto continue
     end
 
-    umbrella.incoming_trains = umbrella.incoming_trains or {}
-    for train_info, resource in pairs(umbrella.incoming_trains) do
-      provides[resource.type_name] = provides[resource.type_name] - resource.count
+    for train_id, order in pairs(umbrella.incoming_trains) do
+      offers[order.resource.type .. "/" .. order.resource.name] =
+          offers[order.resource.type .. "/" .. order.resource.name] - order.count
     end
 
-    for type_name, count in pairs(provides) do
+    for type_name, count in pairs(offers) do
       if umbrella.provider_config.threshold > count then
-        provides[type_name] = nil
+        offers[type_name] = nil
         goto continue
       end
 
-      all_provides[type_name] = all_provides[type_name] or {}
+      all_offers[type_name] = all_offers[type_name] or {}
 
-      MTL_Log(LEVEL.DEBUG, dump(umbrella.train_stop.unit_number))
-      table.insert(all_provides[type_name], {
-        type_name = type_name,
-        threshold_count = umbrella.provider_config.threshold,
+      ---@type MaTrainNetwork.Offer
+      local offer = {
+        type_name = split_type_name(type_name),
         stop = umbrella.train_stop.unit_number,
         count = count,
-      })
+        threshold_count = umbrella.provider_config.threshold,
+      }
+      table.insert(all_offers[type_name], offer)
       ::continue::
     end
 
-    umbrella.provides = provides
     ::continue::
   end
 
-  MTL_Log(LEVEL.DEBUG, "all_provides: " .. dump(all_provides))
-  return all_provides
+  return all_offers
 end
 
 function Tick()
   local available_trains = GetAvaiableTrains()
   local all_requests = GetReqests()
-  local all_provides = GetProvides()
+  local all_offers = GetOffers()
 
   if #available_trains["fluid"] == 0 and #available_trains["item"] == 0 then
     MTL_Log(LEVEL.DEBUG, "#available_trains: " .. #available_trains)
@@ -427,16 +427,16 @@ function Tick()
 
   for type_name, requests_list in pairs(all_requests) do
     for _, request in pairs(requests_list) do
-      if not all_provides[type_name] then
+      if not all_offers[type_name] then
         goto continue
       end
-      for _, provide in pairs(all_provides[type_name]) do
-        if provide.count < provide.threshold_count then
+      for _, offer in pairs(all_offers[type_name]) do
+        if offer.count < offer.threshold_count then
           goto continue
         end
 
-        local sent_amount = (request.count > provide.count and provide.count) or request.count
-        local carriage_type = type_name.type
+        local sent_amount = (request.count > offer.count and offer.count) or request.count
+        local carriage_type = split_type_name(type_name).type
 
         MTL_Log(LEVEL.DEBUG, "type is " .. carriage_type)
         if #available_trains[carriage_type] == 0 then
@@ -447,12 +447,7 @@ function Tick()
         local train_info = available_trains[carriage_type][#available_trains[carriage_type]]
         table.remove(available_trains[carriage_type])
 
-        provide.count = provide.count - sent_amount
-
-
-        for key, value in ipairs(storage.MTL.stops[request.stop].incoming_trains) do
-          MTL_Log(LEVEL.DEBUG, "incoming train " .. dump(key) .. "  " .. dump(value))
-        end
+        offer.count = offer.count - sent_amount
 
         MTL_Log(LEVEL.DEBUG, "train info" .. dump(train_info))
         local type, name = split_type_name(type_name)
@@ -461,14 +456,14 @@ function Tick()
         ---@type MaTrainNetwork.Train.Order
         train_order = {
           train = train_info.train,
-          resource = type_name,
+          resource = split_type_name(type_name),
           count = sent_amount,
           depot = train_info.depot,
-          provider = provide.stop,
+          provider = offer.stop,
           requester = request.stop,
         }
         storage.MTL.stops[request.stop].incoming_trains[train_order.train.id] = train_order
-        storage.MTL.stops[provide.stop].incoming_trains[train_order.train.id] = train_order
+        storage.MTL.stops[offer.stop].incoming_trains[train_order.train.id] = train_order
         storage.MTL.train_orders[train_info.train.id] = train_order
 
         CreateTrainSchedule(train_order)

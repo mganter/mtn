@@ -47,6 +47,14 @@ do
     local Request = {
     }
 
+    ---@class (exact) MaTrainNetwork.Offer
+    ---@field type_name MaTrainNetwork.ResourceTypeName
+    ---@field stop uint
+    ---@field count uint
+    ---@field threshold_count uint
+    local Offer = {
+    }
+
     ---@class (exact) MaTrainNetwork.Train.TrainInfo
     ---@field train LuaTrain
     ---@field depot uint
