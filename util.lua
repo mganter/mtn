@@ -55,10 +55,10 @@ function MTL_Log(level, message)
       msg = "MLT ERROR: " .. message
    end
 
-   if level >= level_to_log then
+   if level >= LEVEL[settings.global["mtn-file-log-level"].value] then
       log(msg)
    end
-   if level >= level_to_user then
+   if level >= LEVEL[settings.global["mtn-user-log-level"].value] then
       game.print(msg)
    end
 end
@@ -69,10 +69,16 @@ end
 
 ---@param type_name string
 ---@return MaTrainNetwork.ResourceTypeName
-function split_type_name(type_name)
+function from_slash_notation(type_name)
    local slash_pos = string.find(type_name, "/")
    return {
       type = string.sub(type_name, 1, slash_pos-1), 
       name = string.sub(type_name, slash_pos+1)
    }
+end
+
+---@param resource MaTrainNetwork.ResourceTypeName
+---@return string
+function to_slash_notation(resource)
+   return resource.type .. "/" .. resource.name
 end

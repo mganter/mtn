@@ -31,6 +31,7 @@ do
     ---@field depot uint -- unit_number of requested train
     ---@field resource MaTrainNetwork.ResourceTypeName 
     ---@field count uint -- amount of resource to be transported
+    ---@field current_stop? uint -- unit_number of the last reached stop
     local Order = {
     }
 

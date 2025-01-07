@@ -260,7 +260,7 @@ function GetAvaiableTrains()
       if not umbrella.assigned_train then
         umbrella.assigned_train = train
       end
-      
+
       if umbrella.assigned_train.id ~= train.id then
         SetStatus(umbrella, Status.DEPOT_TRAIN_ERROR)
         MTL_Log(LEVEL.ERROR,
@@ -322,9 +322,9 @@ function GetReqests()
     end
 
     umbrella.incoming_trains = umbrella.incoming_trains or {}
-    for _, order in ipairs(umbrella.incoming_trains) do
-      requests[order.resource]
-      = requests[order.resource] + order.count
+    for _, order in pairs(umbrella.incoming_trains) do
+      requests[to_slash_notation(order.resource)]
+      = requests[to_slash_notation(order.resource)] + order.count
     end
 
     for type_name, count in pairs(requests) do
@@ -337,7 +337,7 @@ function GetReqests()
 
       ---@type MaTrainNetwork.Request
       local request = {
-        type_name = split_type_name(type_name),
+        type_name = from_slash_notation(type_name),
         stop = umbrella.train_stop.unit_number,
         count = -count,
       }
@@ -372,7 +372,6 @@ function GetOffers()
     for _, value in ipairs(signals) do
       -- not value.signal.type is equivalent to "item" as of api docs
       if not value.signal.type or value.signal.type == "item" or value.signal.type == "fluid" then
-        MTL_Log(LEVEL.DEBUG, "value.signal: " .. dump(value.signal) .. " " .. value.count)
         if umbrella.provider_config.threshold <= value.count then
           local type = value.signal.type or "item"
           local type_name = type .. "/" .. value.signal.name
@@ -381,14 +380,12 @@ function GetOffers()
       end
     end
 
-    if #offers == 0 then
-      goto continue
-    end
-
     for train_id, order in pairs(umbrella.incoming_trains) do
       offers[order.resource.type .. "/" .. order.resource.name] =
-          offers[order.resource.type .. "/" .. order.resource.name] - order.count
+          (offers[order.resource.type .. "/" .. order.resource.name] or 0) - order.count
     end
+
+    MTL_Log(LEVEL.DEBUG, dump(offers))
 
     for type_name, count in pairs(offers) do
       if umbrella.provider_config.threshold > count then
@@ -400,7 +397,7 @@ function GetOffers()
 
       ---@type MaTrainNetwork.Offer
       local offer = {
-        type_name = split_type_name(type_name),
+        type_name = from_slash_notation(type_name),
         stop = umbrella.train_stop.unit_number,
         count = count,
         threshold_count = umbrella.provider_config.threshold,
@@ -419,11 +416,13 @@ function Tick()
   local available_trains = GetAvaiableTrains()
   local all_requests = GetReqests()
   local all_offers = GetOffers()
-
-  if #available_trains["fluid"] == 0 and #available_trains["item"] == 0 then
-    MTL_Log(LEVEL.DEBUG, "#available_trains: " .. #available_trains)
-    return
-  end
+  MTL_Log(LEVEL.DEBUG, "============")
+  MTL_Log(LEVEL.DEBUG,
+    "#available_trains: item: " .. #available_trains["item"] .. "  fluid: " .. #available_trains["fluid"]
+  )
+  MTL_Log(LEVEL.DEBUG, "all_requests: " .. dump(all_requests))
+  MTL_Log(LEVEL.DEBUG, "all_offers: " .. dump(all_offers))
+  MTL_Log(LEVEL.DEBUG, "current orders: " .. dump(storage.MTL.train_orders))
 
   for type_name, requests_list in pairs(all_requests) do
     for _, request in pairs(requests_list) do
@@ -436,7 +435,7 @@ function Tick()
         end
 
         local sent_amount = (request.count > offer.count and offer.count) or request.count
-        local carriage_type = split_type_name(type_name).type
+        local carriage_type = from_slash_notation(type_name).type
 
         MTL_Log(LEVEL.DEBUG, "type is " .. carriage_type)
         if #available_trains[carriage_type] == 0 then
@@ -450,13 +449,12 @@ function Tick()
         offer.count = offer.count - sent_amount
 
         MTL_Log(LEVEL.DEBUG, "train info" .. dump(train_info))
-        local type, name = split_type_name(type_name)
-        MTL_Log(LEVEL.DEBUG, "type: " .. type .. " name: " .. name)
+        MTL_Log(LEVEL.DEBUG, dump(type_name))
         storage.MTL.stops[request.stop].incoming_trains = storage.MTL.stops[request.stop].incoming_trains or {}
         ---@type MaTrainNetwork.Train.Order
         train_order = {
           train = train_info.train,
-          resource = split_type_name(type_name),
+          resource = from_slash_notation(type_name),
           count = sent_amount,
           depot = train_info.depot,
           provider = offer.stop,
@@ -595,23 +593,52 @@ function ConnectConstantCombinatorAndLampCircuit(umbrella)
     "created circuit connection betweend constant combinator and lamp for \"" .. umbrella.train_stop.backer_name .. "\"")
 end
 
+---@param event EventData.on_train_changed_state
 function OnTrainStateChanged(event)
-  storage.MTL.train_orders = storage.MTL.train_orders or {}
-  if not storage.MTL.train_orders[event.train.id] then
+  local order = storage.MTL.train_orders[event.train.id]
+  if not order then
     return
   end
 
+
   if event.old_state == defines.train_state.arrive_station and event.train.state == defines.train_state.wait_station then
-    OnTrainArriving(event)
+    OnTrainArrival(event, order)
+  end
+
+  if event.old_state == defines.train_state.wait_station then
+    OnTrainDeparturevent(event, order)
   end
 end
 
-function OnTrainDeparture(event)
+---@param event EventData.on_train_changed_state
+---@param order MaTrainNetwork.Train.Order
+function OnTrainDeparturevent(event, order)
+  if not order.current_stop then
+    return
+  end
 
+  local departed_stop = storage.MTL.stops[order.current_stop]
+  if departed_stop.role == Roles.PROVIDER or departed_stop.role == Roles.REQUESTER then
+    departed_stop.incoming_trains[event.train.id] = nil
+  end
 end
 
-function OnTrainArriving(event)
-  MTL_Log(LEVEL.DEBUG, "Train " .. event.train.backer_name .. " arrived at " .. event.train.station.backer_name)
+---@param event EventData.on_train_changed_state
+---@param order MaTrainNetwork.Train.Order
+function OnTrainArrival(event, order)
+  MTL_Log(LEVEL.DEBUG, "Train " .. event.train.id .. " arrived at " .. event.train.station.backer_name)
+
+  ---@type MaTrainNetwork.TrainStop.Umbrella
+  local umbrella = storage.MTL.stops[event.train.station.unit_number]
+  if umbrella.id == order.depot or umbrella.id == order.provider or umbrella.id == order.requester then
+    order.current_stop = umbrella.id
+  end
+
+  if umbrella.role == Roles.DEPOT then
+    MTL_Log(LEVEL.INFO, "Train " .. event.train.id .. " successfuly carried out order " .. dump(order))
+    SendTrainToDepot(train_order.train, umbrella)
+    storage.MTL.train_orders[train_order.train.id] = nil
+  end
 end
 
 ---@param order MaTrainNetwork.Train.Order
@@ -624,7 +651,7 @@ function CreateTrainSchedule(order)
         wait_conditions = {
           {
             compare_type = "or",
-            type = (type == "item" and "item_count") or "fluid_count",
+            type = (order.resource.type == "item" and "item_count") or "fluid_count",
             condition = {
               first_signal = { type = tostring(order.resource.type), name = order.resource.name },
               comparator = ">=",
@@ -663,7 +690,26 @@ function CreateTrainSchedule(order)
         }
       },
       {
-        station = storage.MTL.stops[train_info.depot].train_stop.backer_name,
+        station = storage.MTL.stops[order.depot].train_stop.backer_name,
+        wait_conditions = {
+          {
+            type = "time",
+            ticks = 300,
+          }
+        }
+      },
+    }
+  }
+end
+
+---@param train LuaTrain
+---@param depot MaTrainNetwork.TrainStop.Umbrella
+function SendTrainToDepot(train, depot)
+  train.schedule = {
+    current = 1,
+    records = {
+      {
+        station = depot.train_stop.backer_name,
         wait_conditions = {
           {
             type = "time",
