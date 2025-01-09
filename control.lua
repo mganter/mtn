@@ -106,6 +106,7 @@ end
 function DeregisterStop(umbrella)
   if umbrella.role then
     storage.MTL[umbrella.role][umbrella.id] = nil
+    umbrella.role = nil
   end
   return true
 end
