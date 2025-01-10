@@ -21,9 +21,24 @@ do
     ---@field threshold int
     local RequesterConfig = {
     }
-end
 
-do
+    ---@class (exact) MaTrainNetwork.Surface
+    ---@field stops {[uint]:MaTrainNetwork.TrainStop.Umbrella}
+    ---@field role_depot {[uint]:true}
+    ---@field role_requester {[uint]:true}
+    ---@field role_provider {[uint]:true}
+    ---@field train_orders {[uint]:MaTrainNetwork.Train.Order}
+    local MTLSurface = {
+    }
+
+    ---@class (exact) MaTrainNetwork.BaseObject
+    ---@field reverse_lookup {[uint]:uint}
+    ---@field surfaces {[uint]:MaTrainNetwork.Surface}
+    ---@field existing_surfaces [LuaSurface]
+    ---@field current_surface_index uint
+    local MTL = {
+    }
+
     ---@class (exact) MaTrainNetwork.Train.Order
     ---@field train LuaTrain
     ---@field requester uint -- unit_number of requested train
@@ -73,9 +88,9 @@ end
 
 ---@enum MaTrainNetwork.TrainStop.Roles
 Roles = {
-    DEPOT = "role-depot",
-    REQUESTER = "role-requester",
-    PROVIDER = "role-provider",
+    DEPOT = "role_depot",
+    REQUESTER = "role_requester",
+    PROVIDER = "role_provider",
 }
 
 ---@enum CarriageType
