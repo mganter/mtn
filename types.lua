@@ -82,7 +82,7 @@ do
     }
 
     ---@class (exact) MaTrainNetwork.ResourceTypeName
-    ---@field type CarriageType
+    ---@field type MaTrainNetwork.CarriageType
     ---@field name string
     local ResourceTypeName = {
     }

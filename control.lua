@@ -381,7 +381,16 @@ function GetReqests(surface)
     end
 
     for type_name, count in pairs(requests) do
-      if -umbrella.requester_config.threshold < count then
+      local threshold = umbrella.requester_config.threshold or 0
+      if from_slash_notation(type_name).type == "item" then
+        local stack_size = prototypes.item[from_slash_notation(type_name).name].stack_size
+        local stack_sized_threshold = stack_size * (umbrella.requester_config.stack_threshold or 0)
+        if stack_sized_threshold > threshold then
+          threshold = stack_sized_threshold
+        end
+      end
+
+      if -threshold < count then
         requests[type_name] = nil
         goto continue
       end
@@ -443,7 +452,16 @@ function GetOffers(surface)
     MTN_Log(LEVEL.DEBUG, dump(offers))
 
     for type_name, count in pairs(offers) do
-      if umbrella.provider_config.threshold > count then
+      local threshold = umbrella.provider_config.threshold or 0
+      if from_slash_notation(type_name).type == "item" then
+        local stack_size = prototypes.item[from_slash_notation(type_name).name].stack_size
+        local stack_sized_threshold = stack_size * (umbrella.provider_config.stack_threshold or 0)
+        if stack_sized_threshold > threshold then
+          threshold = stack_sized_threshold
+        end
+      end
+
+      if type_name > count then
         offers[type_name] = nil
         goto continue
       end
@@ -455,7 +473,7 @@ function GetOffers(surface)
         type_name = from_slash_notation(type_name),
         stop = umbrella.train_stop.unit_number,
         count = count,
-        threshold_count = umbrella.provider_config.threshold,
+        threshold_count = threshold,
       }
       table.insert(all_offers[type_name], offer)
       ::continue::
