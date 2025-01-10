@@ -116,7 +116,7 @@ end
 ---@param umbrella MaTrainNetwork.TrainStop.Umbrella
 ---@return boolean -- successful or not
 function DeregisterStop(umbrella)
-  local surface = umbrella.train_stop.surface
+  local surface = umbrella.lamp.surface
   if umbrella.role then
     storage.MTL.surfaces[surface.index][umbrella.role][umbrella.id] = nil
     umbrella.role = nil
@@ -194,35 +194,42 @@ end
 
 ---@param event EventData.on_object_destroyed|EventData.on_marked_for_deconstruction
 function DeconstructStop(event)
+  MTN_Log(LEVEL.ERROR, "starting stop deconstruction of "..event.useful_id)
+
   if event.name ~= defines.events.on_object_destroyed then
     MTN_Log(LEVEL.ERROR, "invalid event called function DeconstructStop(event)")
     return
   end
 
-  local entity = game.get_entity_by_unit_number(event.useful_id)
-  if not entity then
-    MTN_Log(LEVEL.ERROR, "could not find entity for deconstruction request")
-    return
+
+  ---@type MaTrainNetwork.TrainStop.Umbrella?
+  local umbrella = nil
+  for index, surface in pairs(storage.MTL.surfaces) do
+    if surface.stops[event.useful_id] then
+      umbrella = surface.stops[event.useful_id]
+      break
+    end
   end
 
-  if event.useful_id == 0 or storage.MTL.surfaces[entity.surface.index].stops[event.useful_id] == nil then
+  if umbrella == nil then
     MTN_Log(LEVEL.ERROR, "could not find train stop for deconstruction request")
     return
   end
 
-  umbrella = storage.MTL.surfaces[entity.surface.index].stops[event.useful_id]
+  local surface = umbrella.cc.surface
+  
   MTN_Log(LEVEL.ERROR, tostring(event.useful_id) .. type(umbrella))
   if not umbrella or not DeregisterStop(umbrella) then
     MTN_Log(LEVEL.ERROR, "could not deregister stop")
   end
   if not umbrella or not DeconstructConstantCombinator(umbrella) then
-    MTN_Log(LEVEL.ERROR, "could not destroy constant combinator")
+    MTLog(LEVEL.ERROR, "could not destroy constant combinator")
   end
   if not umbrella or not DeconstructLamp(umbrella) then
     MTN_Log(LEVEL.ERROR, "could not destory lamp")
   end
 
-  storage.MTL.surfaces[entity.surface.index].stops[event.useful_id] = nil
+  storage.MTL.surfaces[surface.index].stops[event.useful_id] = nil
 end
 
 ---@param surface LuaSurface
