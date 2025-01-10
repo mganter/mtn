@@ -183,6 +183,7 @@ function ReadConfig(umbrella)
   umbrella.role = role[1]
   umbrella.provider_config = provider_config
   umbrella.requester_config = requester_config
+  umbrella.incoming_trains = {}
 
   local surface = umbrella.train_stop.surface
   storage.MTL.surfaces[surface.index][umbrella.role] = storage.MTL[umbrella.role] or {}
@@ -624,7 +625,7 @@ end
 ---@param event EventData.on_train_changed_state
 function OnTrainStateChanged(event)
   ---@type LuaSurface
-  local surface = event.train.get_rails()[0].surface
+  local surface = event.train.get_rails()[1].surface
   local order = storage.MTL.surfaces[surface.index].train_orders[event.train.id]
   if not order then
     return
