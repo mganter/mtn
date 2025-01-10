@@ -560,6 +560,11 @@ function CreateLamp(train_stop)
   lamp.get_or_create_control_behavior().use_colors = true
   lamp.always_on = true
 
+  -- disable interaction with lamp
+  lamp.destructible = false
+  lamp.minable_flag  = false
+  lamp.operable = false
+
   MTN_Log(LEVEL.TRACE, "created lamp for \"" .. train_stop.backer_name .. "\"")
   return lamp
 end
@@ -579,6 +584,10 @@ function CreateConstantCombinator(train_stop)
     MTN_Log(LEVEL.ERROR, "Could not create constant combinator for stop: " .. train_stop.backer_name)
     return nil
   end
+
+  cc.destructible = false
+  cc.minable_flag  = false
+  cc.operable = true
 
   CheckConstantCombinatorConfig(cc)
 
