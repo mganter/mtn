@@ -17,8 +17,8 @@ script.on_event(defines.events.on_tick, function(event) Tick() end)
 
 script.on_event(defines.events.on_train_changed_state, function(event) OnTrainStateChanged(event) end)
 
-script.on_event(defines.events.on_surface_created, function (event) OnSurfaceCreated(event) end)
-script.on_event(defines.events.on_surface_deleted, function (event) OnSurfaceDeleted(event) end)
+script.on_event(defines.events.on_surface_created, function(event) OnSurfaceCreated(event) end)
+script.on_event(defines.events.on_surface_deleted, function(event) OnSurfaceDeleted(event) end)
 
 function init()
   ---@type MaTrainNetwork.BaseObject
@@ -182,7 +182,7 @@ function ReadConfig(umbrella)
     role_count = role_count + 1
     assumed_role = role
   end
-  
+
   MTN_Log(LEVEL.ERROR, "counted: " .. tostring(role_count))
 
   if role_count > 1 then
@@ -216,7 +216,7 @@ end
 
 ---@param event EventData.on_object_destroyed|EventData.on_marked_for_deconstruction
 function DeconstructStop(event)
-  MTN_Log(LEVEL.ERROR, "starting stop deconstruction of "..event.useful_id)
+  MTN_Log(LEVEL.ERROR, "starting stop deconstruction of " .. event.useful_id)
 
   if event.name ~= defines.events.on_object_destroyed then
     MTN_Log(LEVEL.ERROR, "invalid event called function DeconstructStop(event)")
@@ -239,7 +239,7 @@ function DeconstructStop(event)
   end
 
   local surface = umbrella.cc.surface
-  
+
   MTN_Log(LEVEL.ERROR, tostring(event.useful_id) .. type(umbrella))
   if not umbrella or not DeregisterStop(umbrella) then
     MTN_Log(LEVEL.ERROR, "could not deregister stop")
@@ -376,8 +376,12 @@ function GetReqests(surface)
 
     umbrella.incoming_trains = umbrella.incoming_trains or {}
     for _, order in pairs(umbrella.incoming_trains) do
-      requests[to_slash_notation(order.resource)]
-      = requests[to_slash_notation(order.resource)] + order.count
+      MTN_Log(LEVEL.DEBUG, dump(order).." "..dump(requests))
+      if order then
+        requests[to_slash_notation(order.resource)] = requests[to_slash_notation(order.resource)] + order.count
+      else 
+        MTN_Log(LEVEL.ERROR, "somehow order is nil")
+      end
     end
 
     for type_name, count in pairs(requests) do
@@ -435,13 +439,9 @@ function GetOffers(surface)
     local offers = {}
     for _, value in ipairs(signals) do
       -- not value.signal.type is equivalent to "item" as of api docs
-      if not value.signal.type or value.signal.type == "item" or value.signal.type == "fluid" then
-        if umbrella.provider_config.threshold <= value.count then
-          local type = value.signal.type or "item"
-          local type_name = type .. "/" .. value.signal.name
-          offers[type_name] = value.count
-        end
-      end
+      local type = value.signal.type or "item"
+      local type_name = type .. "/" .. value.signal.name
+      offers[type_name] = value.count
     end
 
     for train_id, order in pairs(umbrella.incoming_trains) do
@@ -461,7 +461,7 @@ function GetOffers(surface)
         end
       end
 
-      if type_name > count then
+      if threshold > count then
         offers[type_name] = nil
         goto continue
       end
@@ -521,11 +521,15 @@ function Tick()
         local train_info = available_trains[carriage_type][#available_trains[carriage_type]]
         table.remove(available_trains[carriage_type])
 
+        train_capacity = (carriage_type == "fluid" and train_info.fluid_capacity) or train_info.slot_capacity
+        sent_amount = (sent_amount > train_capacity and train_capacity) or sent_amount
+
         offer.count = offer.count - sent_amount
 
         MTN_Log(LEVEL.DEBUG, "train info" .. dump(train_info))
         MTN_Log(LEVEL.DEBUG, dump(type_name))
-        storage.MTL.surfaces[surface.index].stops[request.stop].incoming_trains = storage.MTL.surfaces[surface.index].stops[request.stop].incoming_trains or {}
+        storage.MTL.surfaces[surface.index].stops[request.stop].incoming_trains = storage.MTL.surfaces[surface.index]
+            .stops[request.stop].incoming_trains or {}
         ---@type MaTrainNetwork.Train.Order
         train_order = {
           train = train_info.train,
@@ -605,12 +609,12 @@ function CreateLamp(train_stop)
   end
   ---@diagnostic disable-next-line: inject-field
   lamp.get_or_create_control_behavior().use_colors = true
-  lamp.always_on = true
+  lamp.always_on                                   = true
 
   -- disable interaction with lamp
-  lamp.destructible = false
-  lamp.minable_flag  = false
-  lamp.operable = false
+  lamp.destructible                                = false
+  lamp.minable_flag                                = false
+  lamp.operable                                    = false
 
   MTN_Log(LEVEL.TRACE, "created lamp for \"" .. train_stop.backer_name .. "\"")
   return lamp
@@ -633,8 +637,8 @@ function CreateConstantCombinator(train_stop)
   end
 
   cc.destructible = false
-  cc.minable_flag  = false
-  cc.operable = true
+  cc.minable_flag = false
+  cc.operable     = true
 
   CheckConstantCombinatorConfig(cc)
 
@@ -725,8 +729,8 @@ function OnTrainArrival(event, surface, order)
 
   if umbrella.role == Roles.DEPOT then
     MTN_Log(LEVEL.INFO, "Train " .. event.train.id .. " successfuly carried out order " .. dump(order))
-    SendTrainToDepot(train_order.train, umbrella)
-    storage.MTL.surfaces[surface.index].train_orders[train_order.train.id] = nil
+    SendTrainToDepot(order.train, umbrella)
+    storage.MTL.surfaces[surface.index].train_orders[order.train.id] = nil
   end
 end
 
