@@ -10,7 +10,9 @@ TECHNOLOGY_MTN_NAME = "ma-train-network"
 
 SIGNAL_DEPOT = "mtn-depot"
 SIGNAL_REQUEST_THRESHOLD = "mtn-request-threshold"
+SIGNAL_REQUEST_STACK_THRESHOLD = "mtn-request-stack-threshold"
 SIGNAL_PROVIDE_THRESHOLD = "mtn-provide-threshold"
+SIGNAL_PROVIDE_STACK_THRESHOLD = "mtn-provide-stack-threshold"
 
 SECTION_GROUP_CONFIG_INDEX = 1
 SECTION_GROUP_OUTPUT_INDEX = 2

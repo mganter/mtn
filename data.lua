@@ -69,9 +69,25 @@ local signal_provide_threshold = {
   subgroup = "mtn-signal",
 }
 
+local signal_provide_stack_threshold = {
+  type = "virtual-signal",
+  name = SIGNAL_PROVIDE_STACK_THRESHOLD,
+  icon = "__base__/graphics/technology/steel-processing.png",
+  icon_size = 256,
+  subgroup = "mtn-signal",
+}
+
 local signal_request_threshold = {
   type = "virtual-signal",
   name = SIGNAL_REQUEST_THRESHOLD,
+  icon = "__base__/graphics/technology/steel-processing.png",
+  icon_size = 256,
+  subgroup = "mtn-signal",
+}
+
+local signal_request_stack_threshold = {
+  type = "virtual-signal",
+  name = SIGNAL_REQUEST_STACK_THRESHOLD,
   icon = "__base__/graphics/technology/steel-processing.png",
   icon_size = 256,
   subgroup = "mtn-signal",
@@ -93,5 +109,7 @@ data:extend({
   subgroup,
   signal_depot,
   signal_provide_threshold,
+  signal_provide_stack_threshold,
   signal_request_threshold,
+  signal_request_stack_threshold,
 })
