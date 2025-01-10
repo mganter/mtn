@@ -13,12 +13,14 @@ do
     }
 
     ---@class (exact) MaTrainNetwork.TrainStop.ProviderConfig
-    ---@field threshold int
+    ---@field threshold? int
+    ---@field stack_threshold? int
     local ProviderConfig = {
     }
 
     ---@class (exact) MaTrainNetwork.TrainStop.RequesterConfig
-    ---@field threshold int
+    ---@field threshold? int
+    ---@field stack_threshold? int
     local RequesterConfig = {
     }
 
@@ -93,7 +95,7 @@ Roles = {
     PROVIDER = "role_provider",
 }
 
----@enum CarriageType
+---@enum MaTrainNetwork.CarriageType
 CarriageType = {
     Item = "item",
     Fluid = "fluid"

@@ -140,8 +140,11 @@ function ReadConfig(umbrella)
   ---@diagnostic disable-next-line: undefined-field -- get_or_create_control_behavior() returns [LuaConstantCombinatorControlBehavior]
   local config_section = umbrella.cc.get_or_create_control_behavior().get_section(SECTION_GROUP_CONFIG_INDEX)
 
+  ---@type {[MaTrainNetwork.TrainStop.Roles]:boolean}
   local role = {}
+  ---@type MaTrainNetwork.TrainStop.ProviderConfig
   local provider_config = {}
+  ---@type MaTrainNetwork.TrainStop.RequesterConfig
   local requester_config = {}
 
   for _, filter in pairs(config_section.filters) do
@@ -149,27 +152,46 @@ function ReadConfig(umbrella)
       goto continue
     end
 
-    if filter.value.type == "virtual" and filter.value.name == SIGNAL_DEPOT then
-      table.insert(role, Roles.DEPOT)
-    end
-    if filter.value.type == "virtual" and filter.value.name == SIGNAL_PROVIDE_THRESHOLD then
-      provider_config.threshold = filter.min
-      table.insert(role, Roles.PROVIDER)
-    end
-    if filter.value.type == "virtual" and filter.value.name == SIGNAL_REQUEST_THRESHOLD then
-      requester_config.threshold = filter.min
-      table.insert(role, Roles.REQUESTER)
+    if filter.value.type == "virtual" then
+      if filter.value.name == SIGNAL_DEPOT then
+        role[Roles.DEPOT] = true
+      end
+      if filter.value.name == SIGNAL_PROVIDE_THRESHOLD then
+        provider_config.threshold = filter.min
+        role[Roles.PROVIDER] = true
+      end
+      if filter.value.name == SIGNAL_PROVIDE_STACK_THRESHOLD then
+        provider_config.stack_threshold = filter.min
+        role[Roles.PROVIDER] = true
+      end
+      if filter.value.name == SIGNAL_REQUEST_THRESHOLD then
+        requester_config.threshold = filter.min
+        role[Roles.REQUESTER] = true
+      end
+      if filter.value.name == SIGNAL_REQUEST_STACK_THRESHOLD then
+        requester_config.stack_threshold = filter.min
+        role[Roles.REQUESTER] = true
+      end
     end
     ::continue::
   end
 
-  if #role > 1 then
+  local role_count = 0
+  local assumed_role = nil
+  for role, _ in pairs(role) do
+    role_count = role_count + 1
+    assumed_role = role
+  end
+  
+  MTN_Log(LEVEL.ERROR, "counted: " .. tostring(role_count))
+
+  if role_count > 1 then
     MTN_Log(LEVEL.ERROR, "train stop \"" .. umbrella.train_stop.backer_name .. "\" has multiple roles " .. dump(role))
     DeregisterStop(umbrella)
     return false
   end
 
-  if #role == 0 then
+  if role_count == 0 then
     MTN_Log(LEVEL.DEBUG, "no role found for stop " .. umbrella.train_stop.backer_name)
     DeregisterStop(umbrella)
     return false
@@ -177,10 +199,10 @@ function ReadConfig(umbrella)
 
   MTN_Log(LEVEL.INFO, "train stop \"" .. umbrella.train_stop.backer_name .. "\" assumed role " .. dump(role))
   -- remove stop from role list
-  if role[1] ~= umbrella.role and umbrella.role then
+  if assumed_role ~= umbrella.role and umbrella.role then
     storage.MTL[umbrella.role][umbrella.train_stop.unit_number] = nil
   end
-  umbrella.role = role[1]
+  umbrella.role = assumed_role
   umbrella.provider_config = provider_config
   umbrella.requester_config = requester_config
   umbrella.incoming_trains = {}

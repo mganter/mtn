@@ -31,6 +31,7 @@ function dump(o)
    end
 end
 
+---@enum MaTrainNetwork.LogLevel
 LEVEL = {
    TRACE = 0,
    DEBUG = 1,
@@ -39,6 +40,8 @@ LEVEL = {
    SILENT = 4,
 }
 
+---@param level MaTrainNetwork.LogLevel
+---@param message string
 function MTN_Log(level, message)
    local msg
    if level == LEVEL.TRACE then
