@@ -223,7 +223,7 @@ function DeconstructStop(event)
     MTN_Log(LEVEL.ERROR, "could not deregister stop")
   end
   if not umbrella or not DeconstructConstantCombinator(umbrella) then
-    MTLog(LEVEL.ERROR, "could not destroy constant combinator")
+    MTN_Log(LEVEL.ERROR, "could not destroy constant combinator")
   end
   if not umbrella or not DeconstructLamp(umbrella) then
     MTN_Log(LEVEL.ERROR, "could not destory lamp")
