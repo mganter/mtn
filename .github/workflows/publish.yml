@@ -1,9 +1,8 @@
 name: Publish Factorio Mod
 
 on:
-  push:
-    branches:
-      - master
+  release:
+    types: [published]
 
 jobs:
   publish-mod:
