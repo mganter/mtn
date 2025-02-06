@@ -6,12 +6,10 @@ script.on_init(function() init() end)
 -- Register Events
 script.on_event(defines.events.on_built_entity, function(event) RegisterStop(event) end)
 script.on_event(defines.events.on_robot_built_entity, function(event) RegisterStop(event) end)
-script.on_event(defines.events.on_cancelled_deconstruction, function(event) RegisterStop(event) end)
 
 script.on_event(defines.events.on_entity_logistic_slot_changed, function(event) UpdateConstantCombinatorConfig(event) end)
 
 -- Deregister Events
-script.on_event(defines.events.on_marked_for_deconstruction, function(event) DeconstructStop(event) end)
 script.on_event(defines.events.on_object_destroyed, function(event) DeconstructStop(event) end)
 script.on_event(defines.events.on_tick, function(event) Tick() end)
 
@@ -212,7 +210,7 @@ function ReadConfig(umbrella)
   return true
 end
 
----@param event EventData.on_object_destroyed|EventData.on_marked_for_deconstruction
+---@param event EventData.on_object_destroyed
 function DeconstructStop(event)
   MTN_Log(LEVEL.ERROR, "starting stop deconstruction of " .. event.useful_id)
 
