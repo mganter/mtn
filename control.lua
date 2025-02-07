@@ -204,7 +204,6 @@ function ReadConfig(umbrella)
   umbrella.incoming_trains = {}
 
   local surface = umbrella.train_stop.surface
-  storage.MTL.surfaces[surface.index][umbrella.role] = storage.MTL.surfaces[surface.index][umbrella.role] or {}
   storage.MTL.surfaces[surface.index][umbrella.role][umbrella.train_stop.unit_number] = true
 
   return true
@@ -841,6 +840,11 @@ end
 ---@return LuaSurface
 function GetNextSurface()
   storage.MTL.current_surface_index = (storage.MTL.current_surface_index % (#storage.MTL.existing_surfaces)) + 1
+  return game.surfaces[storage.MTL.current_surface_index]
+end
+
+---@return LuaSurface
+function GetCurrentSurface()
   return game.surfaces[storage.MTL.current_surface_index]
 end
 
