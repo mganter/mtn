@@ -204,7 +204,6 @@ function ReadConfig(umbrella)
   umbrella.incoming_trains = {}
 
   local surface = umbrella.train_stop.surface
-  storage.MTL.surfaces[surface.index][umbrella.role] = storage.MTL[umbrella.role] or {}
   storage.MTL.surfaces[surface.index][umbrella.role][umbrella.train_stop.unit_number] = true
 
   return true
@@ -212,7 +211,7 @@ end
 
 ---@param event EventData.on_object_destroyed
 function DeconstructStop(event)
-  MTN_Log(LEVEL.ERROR, "starting stop deconstruction of " .. event.useful_id)
+  MTN_Log(LEVEL.INFO, "starting stop deconstruction of " .. event.useful_id)
 
   if event.name ~= defines.events.on_object_destroyed then
     MTN_Log(LEVEL.ERROR, "invalid event called function DeconstructStop(event)")
@@ -416,10 +415,11 @@ end
 function GetOffers(surface)
   ---@type {[string]:MaTrainNetwork.Offer[]}
   local all_offers = {}
-  storage.MTL[Roles.PROVIDER] = storage.MTL[Roles.PROVIDER] or {}
-  for stop_id, _ in pairs(storage.MTL[Roles.PROVIDER]) do
+  storage.MTL.surfaces[surface.index][Roles.PROVIDER] = storage.MTL.surfaces[surface.index][Roles.PROVIDER] or {}
+  for stop_id, _ in pairs(storage.MTL.surfaces[surface.index][Roles.PROVIDER]) do
     local umbrella = storage.MTL.surfaces[surface.index].stops[stop_id]
-    if not umbrella.lamp or not umbrella.cc then
+    if not umbrella or not umbrella.lamp or not umbrella.cc then
+      MTN_Log(LEVEL.INFO, "trainstop "..stop_id.." is not initialized, skipping")
       goto continue
     end
 
@@ -840,6 +840,11 @@ end
 ---@return LuaSurface
 function GetNextSurface()
   storage.MTL.current_surface_index = (storage.MTL.current_surface_index % (#storage.MTL.existing_surfaces)) + 1
+  return game.surfaces[storage.MTL.current_surface_index]
+end
+
+---@return LuaSurface
+function GetCurrentSurface()
   return game.surfaces[storage.MTL.current_surface_index]
 end
 
