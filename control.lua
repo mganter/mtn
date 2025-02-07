@@ -211,7 +211,7 @@ end
 
 ---@param event EventData.on_object_destroyed
 function DeconstructStop(event)
-  MTN_Log(LEVEL.ERROR, "starting stop deconstruction of " .. event.useful_id)
+  MTN_Log(LEVEL.INFO, "starting stop deconstruction of " .. event.useful_id)
 
   if event.name ~= defines.events.on_object_destroyed then
     MTN_Log(LEVEL.ERROR, "invalid event called function DeconstructStop(event)")
