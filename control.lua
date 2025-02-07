@@ -419,7 +419,8 @@ function GetOffers(surface)
   storage.MTL[Roles.PROVIDER] = storage.MTL[Roles.PROVIDER] or {}
   for stop_id, _ in pairs(storage.MTL[Roles.PROVIDER]) do
     local umbrella = storage.MTL.surfaces[surface.index].stops[stop_id]
-    if not umbrella.lamp or not umbrella.cc then
+    if not umbrella or not umbrella.lamp or not umbrella.cc then
+      MTN_Log(LEVEL.INFO, "trainstop "..surface.index.." is not initialized, skipping")
       goto continue
     end
 
