@@ -204,7 +204,7 @@ function ReadConfig(umbrella)
   umbrella.incoming_trains = {}
 
   local surface = umbrella.train_stop.surface
-  storage.MTL.surfaces[surface.index][umbrella.role] = storage.MTL[umbrella.role] or {}
+  storage.MTL.surfaces[surface.index][umbrella.role] = storage.MTL.surfaces[surface.index][umbrella.role] or {}
   storage.MTL.surfaces[surface.index][umbrella.role][umbrella.train_stop.unit_number] = true
 
   return true
