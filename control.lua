@@ -416,11 +416,11 @@ end
 function GetOffers(surface)
   ---@type {[string]:MaTrainNetwork.Offer[]}
   local all_offers = {}
-  storage.MTL[Roles.PROVIDER] = storage.MTL[Roles.PROVIDER] or {}
-  for stop_id, _ in pairs(storage.MTL[Roles.PROVIDER]) do
+  storage.MTL.surfaces[surface.index][Roles.PROVIDER] = storage.MTL.surfaces[surface.index][Roles.PROVIDER] or {}
+  for stop_id, _ in pairs(storage.MTL.surfaces[surface.index][Roles.PROVIDER]) do
     local umbrella = storage.MTL.surfaces[surface.index].stops[stop_id]
     if not umbrella or not umbrella.lamp or not umbrella.cc then
-      MTN_Log(LEVEL.INFO, "trainstop "..surface.index.." is not initialized, skipping")
+      MTN_Log(LEVEL.INFO, "trainstop "..stop_id.." is not initialized, skipping")
       goto continue
     end
 
