@@ -16,22 +16,14 @@ item.name = ITEM_TRAIN_STOP_NAME
 item.place_result = ENTITY_TRAIN_STOP_NAME
 item.icon = "__MaTrainNetwork__/graphics/train-stop-requester.png"
 
-local recipe = {
-  type = "recipe",
-  name = RECIPE_TRAIN_STOP_NAME,
-  category = "basic-crafting",
-  subgroup = "train-transport",
-  icon = "__MaTrainNetwork__/graphics/train-stop-requester.png",
-  icon_size = 64,
-  enabled = false,
-  energy_required = 1,
-  ingredients = {
-    { type = "item", name = "train-stop", amount = 1 }
-  },
-  results = {
-    { type = "item", name = ITEM_TRAIN_STOP_NAME, amount = 1 }
-  },
-} 
+local recipe = table.deepcopy(data.raw["recipe"]["train-stop"])
+recipe.name = RECIPE_TRAIN_STOP_NAME
+recipe.icon = "__MaTrainNetwork__/graphics/train-stop-requester.png"
+recipe.icon_size = 64
+recipe.enabled = false
+recipe.energy_required = 1
+recipe.ingredients = {{ type = "item", name = "train-stop", amount = 1 }}
+recipe.results = {{ type = "item", name = ITEM_TRAIN_STOP_NAME, amount = 1 }}
 
 local technology = {
   type = "technology",
