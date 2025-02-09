@@ -349,6 +349,8 @@ function GetReqests(surface)
       goto continue
     end
 
+    MTN_Log(LEVEL.TRACE, "calculating requests for " .. umbrella.id .. "(" .. umbrella.train_stop.backer_name .. ")")
+
     local signals = umbrella.lamp.get_signals(defines.wire_connector_id.circuit_red)
     if not signals then
       MTN_Log(LEVEL.TRACE, "no signals found for " .. umbrella.train_stop.backer_name)
@@ -368,10 +370,15 @@ function GetReqests(surface)
       end
     end
 
+    MTN_Log(LEVEL.TRACE, "raw requests for " .. umbrella.id .. " " .. dump(requests))
+
     umbrella.incoming_trains = umbrella.incoming_trains or {}
     for _, order in pairs(umbrella.incoming_trains) do
       if order then
-        requests[to_slash_notation(order.resource)] = requests[to_slash_notation(order.resource)] + order.count
+        MTN_Log(LEVEL.TRACE, "subtracting incoming trains from requesting count " .. dump(order))
+        if requests[to_slash_notation(order.resource)] then
+          requests[to_slash_notation(order.resource)] = requests[to_slash_notation(order.resource)] + order.count
+        end
       else
         MTN_Log(LEVEL.ERROR, "somehow order is nil")
       end
@@ -419,7 +426,7 @@ function GetOffers(surface)
   for stop_id, _ in pairs(storage.MTL.surfaces[surface.index][Roles.PROVIDER]) do
     local umbrella = storage.MTL.surfaces[surface.index].stops[stop_id]
     if not umbrella or not umbrella.lamp or not umbrella.cc then
-      MTN_Log(LEVEL.INFO, "trainstop "..stop_id.." is not initialized, skipping")
+      MTN_Log(LEVEL.INFO, "trainstop " .. stop_id .. " is not initialized, skipping")
       goto continue
     end
 
@@ -515,7 +522,7 @@ function Tick()
         table.remove(available_trains[carriage_type])
 
         train_capacity = (carriage_type == "fluid" and train_info.fluid_capacity) or
-        (train_info.slot_capacity * prototypes.item[from_slash_notation(type_name).name].stack_size)
+            (train_info.slot_capacity * prototypes.item[from_slash_notation(type_name).name].stack_size)
         sent_amount = (sent_amount > train_capacity and train_capacity) or sent_amount
 
         offer.count = offer.count - sent_amount
