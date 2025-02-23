@@ -863,6 +863,14 @@ function OnSurfaceCreated(event)
     return
   end
 
+  storage.MTL.surfaces[surface.index] = {
+    stops = {},
+    role_depot = {},
+    role_provider = {},
+    role_requester = {},
+    train_orders = {},
+  }
+
   table.insert(storage.MTL.existing_surfaces, surface)
 end
 
